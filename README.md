@@ -1,5 +1,5 @@
 # Autodiff
-A GUI re-implementation of `k9s`, the best Kubernetes client.
+A user interface designed for Kubernetes cluster administrators operating clusters at scale. Heavily inspired by `k9s`, the best Kubernetes client out there.
 
 Designing mostly around my needs as a Kubernetes engineer at a large organisation, focusing on:
 - Quick traversal between namespaces, resource types, and resources
