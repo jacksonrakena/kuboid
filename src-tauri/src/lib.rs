@@ -1,23 +1,18 @@
-use std::collections::HashMap;
 use futures_util::StreamExt;
-use std::ops::{Deref, DerefMut};
-use std::sync::mpsc::channel;
-use std::thread::{JoinHandle, Thread};
-use k8s_openapi::api::core::v1::Pod;
-use kube::{Api, Client, Discovery, ResourceExt};
-use kube::api::{DynamicObject, GroupVersionKind};
-use kube::discovery::ApiGroup;
-use kube::runtime::{watcher, WatchStreamExt};
-use tauri::http::{Request, Uri};
-use tauri::{async_runtime, Manager, State};
-use tauri::async_runtime::{Mutex, TokioJoinHandle};
-use tauri::ipc::Channel;
-use tokio::sync::MutexGuard;
 use futures_util::TryStreamExt;
+use k8s_openapi::api::core::v1::Pod;
+use kube::api::DynamicObject;
+use kube::discovery::ApiGroup;
 use kube::runtime::watcher::Event;
-use rand::{thread_rng, Rng, SeedableRng};
-use schemars::_private::NoSerialize;
+use kube::runtime::watcher;
+use kube::{Api, Client, Discovery};
+use rand::SeedableRng;
 use serde::Serialize;
+use std::collections::HashMap;
+use tauri::async_runtime::{Mutex, TokioJoinHandle};
+use tauri::http::{Request, Uri};
+use tauri::ipc::Channel;
+use tauri::{async_runtime, Manager, State};
 
 
 #[derive(Serialize,Clone)]
@@ -38,6 +33,7 @@ enum ResourceListenEvent {
     Close
 }
 
+/// Stops a running subscription by aborting the task associated with it.
 #[tauri::command]
 async fn stop_listen_task(
     state: CommandGlobalState<'_>,
@@ -45,15 +41,16 @@ async fn stop_listen_task(
 ) -> Result<(), String> {
     let mut state = state.lock().await;
 
-    if let Some(handle) = state.task_map.remove(&task_id) {
-        // In a real implementation, you would signal the task to stop gracefully.
-        // Here we just detach it.
-        eprintln!("Stopping watcher task id {:?}", task_id);
-        TokioJoinHandle::abort(&handle);
-        Ok(())
-    } else {
-        eprintln!("No watcher found for task id {:?}", task_id);
-        Err(format!("No task found with id {:?}", task_id))
+    match state.task_map.remove(&task_id) {
+        Some(handle) => {
+            eprintln!("[{}] Stopping task with handle {}", task_id, handle.id());
+            TokioJoinHandle::abort(&handle);
+            Ok(())
+        }
+        None => {
+            eprintln!("[{}] No task found to abort", task_id);
+            Err(format!("[{}] No task found to abort", task_id))
+        }
     }
 }
 
@@ -132,12 +129,6 @@ async fn start_listening(
     Ok(subscription_id)
 }
 
-#[derive(Debug)]
-struct KubeObjectCache {
-
-}
-
-
 #[derive(Debug, serde::Serialize)]
 struct XApiResource {
     kind: String,
@@ -199,23 +190,6 @@ async fn list_api_resources(state: CommandGlobalState<'_>) -> Result<Vec<XApiGro
     Ok(groups)
 }
 
-
-#[tauri::command]
-async fn list_pods() -> Result<Vec<Pod>, String> {
-    use k8s_openapi::api::core::v1::Pod;
-    use kube::{Api, Client};
-    // Create a Kubernetes client
-    let client = Client::try_default().await.map_err(|e| e.to_string())?;
-    // Access the Pod API in the default namespace
-    let pods: Api<Pod> = Api::all(client);
-    // List the pods
-    let pod_list = pods
-        .list(&Default::default())
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(pod_list.items)
-}
-
 #[tauri::command]
 async fn exec_raw(state: CommandGlobalState<'_>, path: String) -> Result<String, String> {
 
@@ -236,7 +210,6 @@ struct GlobalState {
     kube_client: Client,
     kube_discovery: Option<Discovery>,
     task_map: HashMap<i32, TokioJoinHandle<()>>,
-    rng: rand::prelude::StdRng
 }
 
 type CommandGlobalState<'a> = State<'a, Mutex<GlobalState>>;
@@ -252,7 +225,6 @@ pub fn run() {
                     kube_client: client.clone(),
                     kube_discovery: Some(Discovery::new(client)),
                     task_map: HashMap::new(),
-                    rng: rand::prelude::StdRng::from_entropy()
                 }));
             });
             Ok(())
@@ -260,7 +232,6 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             list_api_resources,
-            list_pods,
             exec_raw,
             start_listening,
             stop_listen_task

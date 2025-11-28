@@ -7,26 +7,9 @@ import "@radix-ui/colors/gray-dark.css";
 import "@radix-ui/colors/blue-dark.css";
 import "@radix-ui/colors/green-dark.css";
 import "@radix-ui/colors/red-dark.css";
-import humanize from "@jsdevtools/humanize-anything";
-import reactLogo from "./assets/react.svg";
 import { invoke } from "@tauri-apps/api/core";
 import "@radix-ui/themes/styles.css";
-import * as k8s from "@kubernetes/client-node";
-import {
-  Badge,
-  Box,
-  Button,
-  Code,
-  DataList,
-  Dialog,
-  Flex,
-  IconButton,
-  Link,
-  ScrollArea,
-  Table,
-  Text,
-  TextField,
-} from "@radix-ui/themes";
+import { Flex } from "@radix-ui/themes";
 import { ResourceTable } from "./ResourceTable";
 import { TypeSwitcher } from "./popups/TypeSwitcher";
 import { ResourceList } from "./panes/ResourceList";
@@ -82,13 +65,6 @@ export const useKeyPress = (
 
   return keyPressed;
 };
-const StatusBadge = ({ status }: { status: string }) => {
-  let color: "red" | "green" | "yellow" | "gray" = "gray";
-  if (status === "Running") color = "green";
-  else if (status === "Pending") color = "yellow";
-  else if (status === "Failed") color = "red";
-  return <Badge color={color}>{status}</Badge>;
-};
 
 export async function http<T>(
   path: string
@@ -102,9 +78,6 @@ export async function http<T>(
   }
 }
 function App() {
-  const kp = useKeyPress(":", () => {
-    setiskpo(true);
-  });
   useKeyPress(
     "Escape",
     () => {
@@ -113,23 +86,11 @@ function App() {
     { noEffectWhileInTextInput: false }
   );
   const [iskpo, setiskpo] = useState(false);
-  const [termv, settermv] = useState("");
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
-  const [pods, setPods] = useState<k8s.V1Pod[]>([]);
   type ApiGroup = {
     name: string;
     version: string;
     resources: { kind: string; plural: string; api_version: string }[];
   };
-  useEffect(() => {
-    (async () => {
-      const pods = await http<k8s.V1PodList>("/api/v1/pods");
-      if (pods.success) {
-        setPods(pods.data.items);
-      }
-    })();
-  }, []);
   const [selectedResource, setSelectedResource] = useState<{
     kind: string;
     group: string;
@@ -192,8 +153,6 @@ function App() {
         />
         <ResourceTable resource={selectedResource} />
       </Flex>
-
-      <p>{greetMsg}</p>
 
       <TypeSwitcher
         isOpen={iskpo}

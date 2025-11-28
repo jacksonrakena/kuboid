@@ -7,6 +7,7 @@ import {
   ScrollArea,
   Tooltip,
   TextField,
+  Code,
 } from "@radix-ui/themes";
 import { useEffect, useRef, useState } from "react";
 import { useKeyPress } from "./App";
@@ -52,9 +53,12 @@ export const ResourceTable = ({
           name: "Name",
           render: (item: any) => (
             <Flex direction="column">
-              {item.metadata?.name ?? "unknown"}
+              <Box>
+                <Code>{item.metadata?.name ?? "unknown"}</Code>
+              </Box>
+
               {item.metadata?.namespace && (
-                <Text color="gray">{item.metadata?.namespace}</Text>
+                <Text>{item.metadata?.namespace}</Text>
               )}
             </Flex>
           ),
