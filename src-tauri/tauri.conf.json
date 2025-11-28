@@ -12,9 +12,8 @@
   "app": {
     "windows": [
       {
-        "title": "autodiff",
-        "width": 800,
-        "height": 600
+        "hiddenTitle": true,
+        "titleBarStyle": "Overlay"
       }
     ],
     "security": {

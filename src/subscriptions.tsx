@@ -8,12 +8,6 @@ export interface ResourceWithId {
   };
 }
 
-export type ResourceSubscriptionEvent<T> =
-  | {
-      event: "update" | "delete" | "initupdate";
-      data: T;
-    }
-  | { event: "close" };
 type InternalSubscriptionEvent<T> = {
   event: "apply" | "delete" | "initApply";
   data: { resource: T };
@@ -21,7 +15,7 @@ type InternalSubscriptionEvent<T> = {
 
 export const useResourceSubscription = <T,>(
   resource: ResourceType,
-  callback: (event: ResourceSubscriptionEvent<T>) => void
+  callback: (event: InternalSubscriptionEvent<T>) => void
 ) => {
   useEffect(() => {
     const subscriptionId = Math.floor(Math.random() * 99999999);
@@ -36,22 +30,7 @@ export const useResourceSubscription = <T,>(
     const channel = new Channel<InternalSubscriptionEvent<T>>();
     channel.onmessage = (msg) => {
       console.log("Received event for ", resource.kind, msg);
-      if (msg.event === "apply") {
-        callback({
-          event: "update",
-          data: msg.data.resource,
-        });
-      } else if (msg.event === "delete") {
-        callback({
-          event: "delete",
-          data: msg.data.resource,
-        });
-      } else if (msg.event === "initApply") {
-        callback({
-          event: "initupdate",
-          data: msg.data.resource,
-        });
-      }
+      callback(msg);
     };
 
     console.log("Listening for updates", subscription);
@@ -81,20 +60,25 @@ export const useResourceList = <T extends ResourceWithId>(
   }, [resource]);
   useResourceSubscription<T>(resource, (event) => {
     setLastTime(new Date());
-    if (event.event === "close") {
-      setResources([]);
-      return;
-    } else if (event.event === "delete") {
-      setResources((prev) =>
-        prev.filter((e) => e.metadata.uid !== event.data.metadata.uid)
-      );
-    } else if (event.event === "initupdate") {
-      setResources((prev) => [...prev, event.data]);
-    } else {
-      setResources((prev) => [
-        ...prev.filter((e) => e.metadata.uid !== event.data.metadata.uid),
-        event.data,
-      ]);
+    switch (event.event) {
+      case "initApply":
+        setResources((prev) => [...prev, event.data.resource]);
+        break;
+      case "apply":
+        setResources((prev) => [
+          ...prev.filter(
+            (e) => e.metadata.uid !== event.data.resource.metadata.uid
+          ),
+          event.data.resource,
+        ]);
+        break;
+      case "delete":
+        setResources((prev) =>
+          prev.filter(
+            (e) => e.metadata.uid !== event.data.resource.metadata.uid
+          )
+        );
+        break;
     }
   });
   return { resources, lastEventTime: lastTime };

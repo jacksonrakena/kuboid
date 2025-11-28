@@ -3,6 +3,7 @@ import { http } from "./App";
 import { V1CustomResourceDefinition } from "@kubernetes/client-node";
 import * as jpath from "jsonpath-plus";
 import { WellKnownResources } from "./well-knowns";
+import { MRT_ColumnDef } from "mantine-react-table";
 export type RowType = {
   name: string;
   help?: string;
@@ -15,7 +16,7 @@ export const discoverRows = async (
     version: string;
   },
   prototype: any
-): Promise<RowType[]> => {
+): Promise<MRT_ColumnDef<any>[]> => {
   if (
     WellKnownResources.hasOwnProperty(
       `${resource.version}/${resource.plural.toLowerCase()}`
@@ -25,7 +26,7 @@ export const discoverRows = async (
       `${resource.version}/${resource.plural.toLowerCase()}`
     ].rows;
   }
-  const rows: RowType[] = [];
+  const rows: MRT_ColumnDef<any>[] = [];
   if (resource.group) {
     try {
       const crd = await http<V1CustomResourceDefinition>(
@@ -43,12 +44,19 @@ export const discoverRows = async (
         if (version.additionalPrinterColumns) {
           for (const col of version.additionalPrinterColumns) {
             rows.push({
-              name: col.name,
-              help: col.description,
-              render: (item: any) => {
-                const value = jpath.JSONPath({
+              id: col.name,
+              header: col.name,
+              //help: col.description,
+              accessorFn: (item: any) => {
+                return jpath.JSONPath({
                   path: "$" + col.jsonPath,
                   json: item,
+                })[0];
+              },
+              Cell: ({ renderedCellValue, row }) => {
+                const value = jpath.JSONPath({
+                  path: "$" + col.jsonPath,
+                  json: row.original,
                 })[0];
                 if (col.type === "boolean") {
                   return (
@@ -115,5 +123,6 @@ export const discoverRows = async (
   //       path: `status.${key}`,
   //     });
   //   }
+  console.log("[Column discovery] Discovered rows for ", resource, rows);
   return rows;
 };

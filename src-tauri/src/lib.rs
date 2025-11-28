@@ -65,7 +65,6 @@ async fn start_listening(
     subscription_id: i32,
     channel: Channel<ResourceListenEvent>
 ) -> Result<i32, String> {
-    eprintln!("[{}] Starting task ({}/{}/{} {})", subscription_id, group, version, kind, plural);
     let mut state = state.lock().await;
 
     let ar = kube::discovery::ApiResource {
@@ -78,7 +77,7 @@ async fn start_listening(
     let api = Api::<DynamicObject>::all_with(state.kube_client.clone(), &ar);
     let wc = watcher::Config::default();
 
-    state.task_map.insert(subscription_id, tokio::task::spawn(async move {
+    let join_handle = tokio::task::spawn(async move {
         let watch = watcher(api, wc);
         let mut items = watch.boxed();
 
@@ -96,9 +95,9 @@ async fn start_listening(
                         },
                         Event::Apply(e) => {
                             let _ = channel.send(
-                                    ResourceListenEvent::Apply {
-                                        resource: serde_json::to_value(e).unwrap(),
-                                    }
+                                ResourceListenEvent::Apply {
+                                    resource: serde_json::to_value(e).unwrap(),
+                                }
                             );
                         },
                         Event::Delete(e) => {
@@ -125,7 +124,9 @@ async fn start_listening(
                 }
             }
         }
-    }));
+    });
+    eprintln!("[{}] Started task with handle {} ({}/{}/{} {})", subscription_id, join_handle.id(), ar.group, ar.version, ar.kind, ar.plural);
+    state.task_map.insert(subscription_id, join_handle);
     Ok(subscription_id)
 }
 

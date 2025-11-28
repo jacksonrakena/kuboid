@@ -52,8 +52,10 @@ export const ResourceList = ({
 
   return (
     <Box
+      data-tauri-drag-region
       style={{
         borderRight: "1px solid var(--gray-3)",
+        paddingTop: "32px",
       }}
     >
       <ScrollArea
