@@ -258,14 +258,17 @@ checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 name = "autodiff"
 version = "0.1.0"
 dependencies = [
+ "futures-util",
  "k8s-openapi",
  "kube",
+ "rand 0.8.5",
  "schemars 1.1.0",
  "serde",
  "serde_json",
  "tauri",
  "tauri-build",
  "tauri-plugin-opener",
+ "tokio",
 ]
 
 [[package]]

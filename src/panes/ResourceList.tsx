@@ -7,6 +7,7 @@ type ApiResource = {
   plural: string;
   group: string;
   version: string;
+  api_version: string;
 };
 type ApiGroup = {
   name: string;
@@ -101,6 +102,7 @@ export const ResourceList = ({
                         group: res.name === "Core" ? "" : res.name,
                         version: res.version,
                         plural: r.plural,
+                        api_version: r.api_version,
                       });
                     }}
                   >

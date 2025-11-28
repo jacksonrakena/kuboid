@@ -120,7 +120,7 @@ function App() {
   type ApiGroup = {
     name: string;
     version: string;
-    resources: { kind: string; plural: string }[];
+    resources: { kind: string; plural: string; api_version: string }[];
   };
   useEffect(() => {
     (async () => {
@@ -134,6 +134,7 @@ function App() {
     kind: string;
     group: string;
     version: string;
+    api_version: string;
     plural: string;
   }>({
     // plural: "connectors",
@@ -144,6 +145,7 @@ function App() {
     kind: "Pod",
     group: "",
     version: "v1",
+    api_version: "v1",
   });
   const [apiResources, setApiResources] = useState<ApiGroup[]>([]);
   useEffect(() => {
@@ -202,6 +204,7 @@ function App() {
             group: group.name === "Core" ? "" : group.name,
             plural: resource.plural,
             version: group.version,
+            api_version: resource.api_version,
           }));
         })}
         onAction={(action) => {

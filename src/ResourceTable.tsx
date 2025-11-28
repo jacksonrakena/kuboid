@@ -1,22 +1,21 @@
 import {
   Box,
   Flex,
-  DataList,
   Table,
   Badge,
   Text,
   ScrollArea,
   Tooltip,
-  Spinner,
   TextField,
 } from "@radix-ui/themes";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { http, useKeyPress } from "./App";
+import { useEffect, useRef, useState } from "react";
+import { useKeyPress } from "./App";
 import humanize from "@jsdevtools/humanize-anything";
 
-import { intervalToDuration, formatDuration } from "date-fns";
 import { RowType, discoverRows } from "./row-discovery";
 import { MagnifyingGlassIcon } from "@radix-ui/react-icons";
+import { formatKubeAge } from "./well-known-formatters";
+import { useResourceList } from "./subscriptions";
 
 export const ResourceTable = ({
   resource,
@@ -25,6 +24,7 @@ export const ResourceTable = ({
     kind: string;
     group: string;
     plural: string;
+    api_version: string;
     version: string;
   };
 }) => {
@@ -41,37 +41,12 @@ export const ResourceTable = ({
     { noEffectWhileInTextInput: false }
   );
   const [searchTerm, setSearchTerm] = useState("");
-  const [resourceState, setResourceState] = useState<
-    | { state: "loading" }
-    | { state: "error"; error: string }
-    | { state: "ready"; resources: any[] }
-  >({ state: "loading" });
-  useEffect(() => {
-    (async () => {
-      setResourceState({ state: "loading" });
-      console.log("Fetching resources for", resource);
-      const path =
-        resource.group === ""
-          ? `/api/${resource.version}/${resource.kind.toLowerCase()}s`
-          : `/apis/${resource.group}/${
-              resource.version
-            }/${resource.kind.toLowerCase()}s`;
-      const res = await http<{ items: any[] }>(path);
-      if (res.success) {
-        console.log(res.data);
-        setResourceState({ state: "ready", resources: res.data.items });
-      } else {
-        setResourceState({ state: "error", error: res.error });
-      }
-    })();
-  }, [resource]);
+  const { resources, lastEventTime } = useResourceList<any>(resource);
   const [defaultRows, setDefaultRows] = useState<RowType[]>([]);
   useEffect(() => {
     (async () => {
       const discovered =
-        resourceState.state === "ready" && resourceState.resources.length > 0
-          ? await discoverRows(resource, resourceState.resources[0])
-          : [];
+        resources.length > 0 ? await discoverRows(resource, resources[0]) : [];
       setDefaultRows([
         {
           name: "Name",
@@ -88,19 +63,16 @@ export const ResourceTable = ({
         {
           name: "Age",
           render: (item: any) => {
-            const duration = intervalToDuration({
-              start: new Date(item.metadata?.creationTimestamp),
-              end: new Date(),
-            });
-            return formatDuration(duration, {});
+            return formatKubeAge(item.metadata?.creationTimestamp);
           },
         },
       ]);
     })();
-  }, [resourceState]);
+  }, [resources]);
+
   return (
     <Flex direction="column">
-      <Box>
+      <Flex align="center" gap="4">
         <TextField.Root
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.currentTarget.value)}
@@ -111,68 +83,57 @@ export const ResourceTable = ({
             <MagnifyingGlassIcon height="16" width="16" />
           </TextField.Slot>
         </TextField.Root>
-      </Box>
+        <Box>
+          <Text color="gray" size={"2"}>
+            Last event: {lastEventTime?.toString() ?? "unknown"}
+          </Text>
+        </Box>
+      </Flex>
       <ScrollArea style={{ width: "100%" }}>
-        {resourceState.state === "loading" && (
-          <Flex
-            justify="center"
-            align="center"
-            style={{ height: "100%", width: "100%" }}
-          >
-            <Box>
-              <Spinner size="3" />
-              <Text>
-                Loading {resource.version}/{resource.kind}...
-              </Text>
-            </Box>
-          </Flex>
-        )}
-        {resourceState.state === "ready" && (
-          <Table.Root size="1">
-            <Table.Header>
-              <Table.Row>
-                {defaultRows.map((row) => (
-                  <Tooltip content={row.help ?? "none"} key={row.name}>
-                    <Table.ColumnHeaderCell>{row.name}</Table.ColumnHeaderCell>
-                  </Tooltip>
-                ))}
-              </Table.Row>
-            </Table.Header>
+        <Table.Root size="1">
+          <Table.Header>
+            <Table.Row>
+              {defaultRows.map((row) => (
+                <Tooltip content={row.help ?? "none"} key={row.name}>
+                  <Table.ColumnHeaderCell>{row.name}</Table.ColumnHeaderCell>
+                </Tooltip>
+              ))}
+            </Table.Row>
+          </Table.Header>
 
-            <Table.Body>
-              {resourceState.resources
-                .filter((r) => {
-                  if (searchTerm === "") return true;
-                  const term = searchTerm.toLowerCase();
-                  return (
-                    r.metadata?.name?.toLowerCase().includes(term) ||
-                    (r.metadata?.namespace &&
-                      r.metadata?.namespace.toLowerCase().includes(term)) ||
-                    r.status?.phase?.toLowerCase().includes(term) ||
-                    humanize(r).toLowerCase().includes(term)
-                  );
-                })
-                .map((pod) => (
-                  <Table.Row key={pod.metadata?.name}>
-                    {defaultRows.map((row) => (
-                      <Table.Cell key={row.name}>
-                        {"render" in row
-                          ? row.render(pod)
-                          : JSON.stringify(
-                              row.path
-                                .split(".")
-                                .reduce(
-                                  (obj, key) => (obj ? obj[key] : "unknown"),
-                                  pod
-                                )
-                            )}
-                      </Table.Cell>
-                    ))}
-                  </Table.Row>
-                ))}
-            </Table.Body>
-          </Table.Root>
-        )}
+          <Table.Body>
+            {resources
+              .filter((r) => {
+                if (searchTerm === "") return true;
+                const term = searchTerm.toLowerCase();
+                return (
+                  r.metadata?.name?.toLowerCase().includes(term) ||
+                  (r.metadata?.namespace &&
+                    r.metadata?.namespace.toLowerCase().includes(term)) ||
+                  r.status?.phase?.toLowerCase().includes(term) ||
+                  humanize(r).toLowerCase().includes(term)
+                );
+              })
+              .map((pod) => (
+                <Table.Row key={pod.metadata?.name}>
+                  {defaultRows.map((row) => (
+                    <Table.Cell key={row.name}>
+                      {"render" in row
+                        ? row.render(pod)
+                        : JSON.stringify(
+                            row.path
+                              .split(".")
+                              .reduce(
+                                (obj, key) => (obj ? obj[key] : "unknown"),
+                                pod
+                              )
+                          )}
+                    </Table.Cell>
+                  ))}
+                </Table.Row>
+              ))}
+          </Table.Body>
+        </Table.Root>
       </ScrollArea>
     </Flex>
   );

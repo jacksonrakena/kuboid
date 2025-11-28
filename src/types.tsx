@@ -3,4 +3,5 @@ export type ResourceType = {
   group: string;
   plural: string;
   version: string;
+  api_version: string;
 };
