@@ -66,7 +66,7 @@ export const useKubePathParams = (): KubeUrlComponents => {
   return {
     group: "",
     api_version: assertion.api_version!,
-    resource_plural: assertion.resource_plural!,
+    resource_plural: assertion.resource_plural! ?? "namespaces",
     namespace: assertion.namespace,
     name: assertion.name,
   };

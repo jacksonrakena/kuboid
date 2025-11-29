@@ -23,6 +23,29 @@ const router = createBrowserRouter([
     Component: App,
     children: [
       {
+        // Specific override for namespaces themselves, those special little namespaces :)
+        path: "api/:api_version/namespaces/:name",
+        ErrorBoundary: RootErrorBoundary,
+        Component: ResourceInfo,
+        children: [
+          {
+            index: true,
+            Component: OverviewPane,
+            ErrorBoundary: RootErrorBoundary,
+          },
+          {
+            path: "yaml",
+            ErrorBoundary: RootErrorBoundary,
+            Component: YAMLPane,
+          },
+          {
+            path: "events",
+            Component: EventsPane,
+            ErrorBoundary: RootErrorBoundary,
+          },
+        ],
+      },
+      {
         // API/core group resources
         path: "api/:api_version/namespaces?/:namespace?/:resource_plural/:name",
         ErrorBoundary: RootErrorBoundary,
@@ -31,12 +54,18 @@ const router = createBrowserRouter([
           {
             index: true,
             Component: OverviewPane,
+            ErrorBoundary: RootErrorBoundary,
           },
           {
             path: "yaml",
+            ErrorBoundary: RootErrorBoundary,
             Component: YAMLPane,
           },
-          { path: "events", Component: EventsPane },
+          {
+            path: "events",
+            Component: EventsPane,
+            ErrorBoundary: RootErrorBoundary,
+          },
         ],
       },
       {
@@ -48,12 +77,18 @@ const router = createBrowserRouter([
           {
             index: true,
             Component: OverviewPane,
+            ErrorBoundary: RootErrorBoundary,
           },
           {
             path: "yaml",
+            ErrorBoundary: RootErrorBoundary,
             Component: YAMLPane,
           },
-          { path: "events", Component: EventsPane },
+          {
+            path: "events",
+            Component: EventsPane,
+            ErrorBoundary: RootErrorBoundary,
+          },
         ],
       },
       {

@@ -14,6 +14,7 @@ import {
   useInRouterContext,
   useMatch,
 } from "react-router";
+import { useCachedResource } from "./utils";
 
 export const ResourceInfo = () => {
   const kubePathComponents = useKubePathParams();
@@ -27,20 +28,7 @@ export const ResourcePage = ({
 }) => {
   const selfRoute = makeKubePath(kubePathComponents);
   //const cache = useKubernetesResourceCache(makeKubePath(kubePathComponents));
-  const cachedResources = useAtomValue(kubernetesResourceAtom);
-  const resourceType = {
-    ...kubePathComponents,
-    name: "",
-    namespace: "",
-  };
-  const resourcesOfType = cachedResources[makeKubePath(resourceType)];
-  const resource = resourcesOfType.find(
-    (e) =>
-      e.metadata.name === kubePathComponents.name &&
-      (kubePathComponents.namespace
-        ? e.metadata.namespace === kubePathComponents.namespace
-        : true)
-  );
+  const resource = useCachedResource(kubePathComponents);
 
   return (
     <Flex direction={"column"} style={{ width: "100%" }}>
@@ -50,8 +38,14 @@ export const ResourcePage = ({
         style={{ padding: "4px" }}
       >
         <Text data-tauri-drag-region color="gray" size="2">
-          <NavLink to={makeKubePath(resourceType)}>
-            {resourceType.resource_plural}
+          <NavLink
+            to={makeKubePath({
+              ...kubePathComponents,
+              name: "",
+              namespace: "",
+            })}
+          >
+            {kubePathComponents.resource_plural}
           </NavLink>
         </Text>
         <Heading data-tauri-drag-region>{resource?.metadata.name}</Heading>

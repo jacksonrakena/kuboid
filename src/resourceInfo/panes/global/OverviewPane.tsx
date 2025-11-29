@@ -46,7 +46,7 @@ export const OverviewPane = () => {
                     ([key, value]) => (
                       <>
                         <Code color="gray">
-                          {key}: {value}
+                          {key}: {value as string}
                         </Code>
                       </>
                     )
@@ -79,7 +79,7 @@ export const OverviewPane = () => {
                     ([key, value]) => (
                       <>
                         <Code color="gray">
-                          {key}: {value}
+                          {key}: {value as string}
                         </Code>
                       </>
                     )
