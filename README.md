@@ -1,3 +1,4 @@
+![logo](src-tauri/icons/128x128@2x.png)
 # Autodiff
 A user interface designed for Kubernetes cluster administrators operating clusters at scale. Heavily inspired by `k9s`, the best Kubernetes client out there.
 
