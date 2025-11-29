@@ -6,7 +6,7 @@ import {
   TextField,
   Tooltip,
 } from "@radix-ui/themes";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   MantineReactTable,
@@ -21,6 +21,7 @@ import { useKubePathParams } from "../../util/kube/routes";
 import { makeKubePath } from "../../util/kube/routes";
 import { useKeyPress } from "../../util/keybinds";
 import { NavLink } from "react-router";
+import { Builtins } from "./layouts/builtins";
 
 export const ResourceTable = () => {
   const kubeParams = useKubePathParams();
@@ -46,66 +47,24 @@ export const ResourceTableInner = ({
   );
   const { resources, lastEventTime } = useResourceList<any>(kubeParams);
 
-  const [defaultRows, setDefaultRows] = useState<MRT_ColumnDef<any>[]>([
-    {
-      id: "metadata-name",
-      header: "Name",
-      accessorFn: (row) => row.metadata?.name,
-      Cell: ({ renderedCellValue }) => <>{renderedCellValue}</>,
-    },
-    {
-      id: "metadata-age",
-      header: "Age",
-      accessorFn: (row) => new Date(row.metadata?.creationTimestamp),
-      filterVariant: "date-range",
-      Cell: ({ cell }) => <>{formatKubeAge(cell.getValue() as Date)}</>,
-    },
-  ]);
+  const [asyncColumns, setAsyncColumns] = useState<MRT_ColumnDef<any>[]>([]);
+
   useEffect(() => {
     (async () => {
       const discovered =
         resources.length > 0
           ? await discoverRows(kubeParams, resources[0])
           : [];
-      setDefaultRows([
-        {
-          id: "metadata-name",
-          header: "Name",
-          accessorFn: (row) => row.metadata?.name,
-          Cell: ({ renderedCellValue, row }) => (
-            <NavLink
-              to={makeKubePath({
-                ...kubeParams,
-                namespace: row.original.metadata.namespace,
-                name: row.original.metadata.name,
-              })}
-            >
-              {/* <Box>
-              <Code>{item.metadata?.name ?? "unknown"}</Code>
-            </Box>
-
-            {item.metadata?.namespace && (
-              <Text>{item.metadata?.namespace}</Text>
-            )} */}
-              {renderedCellValue}
-            </NavLink>
-          ),
-        },
-        ...discovered,
-        {
-          id: "metadata-age",
-          header: "Age",
-          accessorFn: (row) => new Date(row.metadata?.creationTimestamp),
-          filterVariant: "date-range",
-          Cell: ({ cell }) => <>{formatKubeAge(cell.getValue() as Date)}</>,
-          size: 80,
-        },
-      ]);
+      setAsyncColumns(discovered);
     })();
   }, [resources]);
+  const rows = useMemo(
+    () => [...Builtins.Prepended, ...asyncColumns, ...Builtins.Appended],
+    [asyncColumns]
+  );
 
   const table = useMantineReactTable({
-    columns: defaultRows,
+    columns: rows,
     data: resources,
     enableDensityToggle: false,
     initialState: {
@@ -117,6 +76,14 @@ export const ResourceTableInner = ({
     enableRowVirtualization: true,
     enableBottomToolbar: false,
   });
+  useEffect(() => {
+    if (resources.length > 0) {
+      table.setColumnVisibility((d) => ({
+        ...d,
+        "metadata-namespace": !!resources[0].metadata.namespace,
+      }));
+    }
+  }, [resources, table]);
   return (
     <Flex direction="column" flexGrow={"1"}>
       <Flex
