@@ -11,3 +11,27 @@ export async function http<T>(
     return { success: false, error: r as string };
   }
 }
+
+export async function detailResource<T>(
+  group: string,
+  apiVersion: string,
+  resourcePlural: string,
+  name: string,
+  namespace?: string
+): Promise<{ success: true; data: T } | { success: false; error: string }> {
+  try {
+    const data = await invoke("detail_resource", {
+      group,
+      apiVersion,
+      resourcePlural,
+      name,
+      namespace,
+    });
+    if (typeof data === "string") {
+      return { success: false, error: data };
+    }
+    return { success: true, data: data as T };
+  } catch (e) {
+    return { success: false, error: String(e) };
+  }
+}
