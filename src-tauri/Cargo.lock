@@ -255,23 +255,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
 [[package]]
-name = "autodiff"
-version = "0.1.0"
-dependencies = [
- "futures-util",
- "k8s-openapi",
- "kube",
- "rand 0.8.5",
- "schemars 1.1.0",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-opener",
- "tokio",
-]
-
-[[package]]
 name = "backon"
 version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2172,6 +2155,23 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+]
+
+[[package]]
+name = "kuboid"
+version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "k8s-openapi",
+ "kube",
+ "rand 0.8.5",
+ "schemars 1.1.0",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-opener",
+ "tokio",
 ]
 
 [[package]]

@@ -1,5 +1,5 @@
 ![logo](src-tauri/icons/128x128@2x.png)
-# Autodiff
+# Kuboid
 A user interface designed for Kubernetes cluster administrators operating clusters at scale. Heavily inspired by `k9s`, the best Kubernetes client out there.
 
 Designing mostly around my needs as a Kubernetes engineer at a large organisation, focusing on:
@@ -8,7 +8,7 @@ Designing mostly around my needs as a Kubernetes engineer at a large organisatio
 - Performance at scale is critical
   - 5,000+ pods, 20+ namespaces, lots of custom resource definitions, custom operators, ArgoCD, Kargo, etc
   - Designed with relative namespace isolation in mind
-- Advanced control over how Autodiff connects to Kubernetes
+- Advanced control over how Kuboid connects to Kubernetes
   - Proxy server, proxy script to generate credentials (common in enterprise setups)
 - Moving beyond limitations in `k9s`
   - [ ] Powerful manipulation of logs
