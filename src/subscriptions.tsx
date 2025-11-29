@@ -1,6 +1,8 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
-import { type KubeUrlComponents } from "./util/kube";
+import { makeKubePath, type KubeUrlComponents } from "./util/kube";
+import { useKubernetesResourceCache } from "./util/clientstate";
+import { useAtom, useSetAtom } from "jotai";
 
 export interface ResourceWithId {
   metadata: {
@@ -8,10 +10,12 @@ export interface ResourceWithId {
   };
 }
 
-type InternalSubscriptionEvent<T> = {
-  event: "apply" | "delete" | "initApply";
-  data: { resource: T };
-};
+type InternalSubscriptionEvent<T> =
+  | {
+      event: "apply" | "delete" | "initApply";
+      data: { resource: T };
+    }
+  | { event: "init" | "initDone" };
 
 export const useResourceSubscription = <T,>(
   resource: KubeUrlComponents,
@@ -50,6 +54,8 @@ export type ResourceListState<T extends ResourceWithId> = {
 export const useResourceList = <T extends ResourceWithId>(
   resourceType: KubeUrlComponents
 ) => {
+  const kubeCacheAtom = useKubernetesResourceCache(makeKubePath(resourceType));
+  const setResourcesInCache = useSetAtom(kubeCacheAtom);
   const [resources, setResources] = useState<T[]>([]);
   const [lastTime, setLastTime] = useState<Date | null>(null);
   useEffect(() => {
@@ -59,8 +65,14 @@ export const useResourceList = <T extends ResourceWithId>(
   useResourceSubscription<T>(resourceType, (event) => {
     setLastTime(new Date());
     switch (event.event) {
+      case "init":
+        setResourcesInCache(() => []);
+        break;
+      case "initDone":
+        break;
       case "initApply":
         setResources((prev) => [...prev, event.data.resource]);
+        setResourcesInCache((prev) => [...prev, event.data.resource]);
         break;
       case "apply":
         setResources((prev) => [
@@ -69,9 +81,20 @@ export const useResourceList = <T extends ResourceWithId>(
           ),
           event.data.resource,
         ]);
+        setResourcesInCache((prev) => [
+          ...prev.filter(
+            (e) => e.metadata.uid !== event.data.resource.metadata.uid
+          ),
+          event.data.resource,
+        ]);
         break;
       case "delete":
         setResources((prev) =>
+          prev.filter(
+            (e) => e.metadata.uid !== event.data.resource.metadata.uid
+          )
+        );
+        setResourcesInCache((prev) =>
           prev.filter(
             (e) => e.metadata.uid !== event.data.resource.metadata.uid
           )

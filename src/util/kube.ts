@@ -5,6 +5,8 @@ export type KubeGroup = "api" | "apis";
 export interface KubeUrlComponents {
   // resource namespace
   namespace?: string;
+  // resource name
+  name?: string;
 
   // empty string for core group,
   // otherwise the api group name
@@ -29,17 +31,21 @@ export interface KubeUrlComponents {
  * /apis/admissionregistration.k8s.io/v1/mutatingwebhookconfigurations - { group: "admissionregistration.k8s.io", api_version: "admissionregistration.k8s.io/v1", resource_plural: "mutatingwebhookconfigurations" }
  */
 export const makeKubePath = (components: KubeUrlComponents) => {
-  return `/${components.group ? "apis" : "api"}/${components.api_version}/${components.namespace ? `namespaces/${components.namespace}/` : ""}${components.resource_plural}`;
+  return `/${components.group ? "apis" : "api"}/${components.api_version}/${components.namespace ? `namespaces/${components.namespace}/` : ""}${components.resource_plural}${components.name ? `/${components.name}` : ""}`;
 };
 
 type KubeCoreGroupPathParams = {
   api_version: string;
   resource_plural: string;
+  name?: string;
+  namespace?: string;
 };
 type KubeApisGroupPathParams = {
   api_group_domain: string;
   api_group_version: string;
   resource_plural: string;
+  name?: string;
+  namespace?: string;
 };
 type KubePathParams = KubeCoreGroupPathParams | KubeApisGroupPathParams;
 export const useKubePathParams = (): KubeUrlComponents => {
@@ -51,6 +57,8 @@ export const useKubePathParams = (): KubeUrlComponents => {
       api_version:
         assertion.api_group_domain + "/" + assertion.api_group_version!,
       resource_plural: assertion.resource_plural!,
+      namespace: assertion.namespace,
+      name: assertion.name,
     };
   }
 
@@ -59,5 +67,7 @@ export const useKubePathParams = (): KubeUrlComponents => {
     group: "",
     api_version: assertion.api_version!,
     resource_plural: assertion.resource_plural!,
+    namespace: assertion.namespace,
+    name: assertion.name,
   };
 };

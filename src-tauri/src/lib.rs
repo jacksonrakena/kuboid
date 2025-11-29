@@ -18,6 +18,8 @@ use tauri::{async_runtime, Manager, State};
 #[derive(Serialize,Clone)]
 #[serde(rename_all = "camelCase", rename_all_fields = "camelCase", tag = "event", content = "data")]
 enum ResourceListenEvent {
+    Init,
+    InitDone,
     InitApply {
         resource: serde_json::Value
     },
@@ -31,6 +33,33 @@ enum ResourceListenEvent {
         message: String
     },
     Close
+}
+
+#[tauri::command]
+async fn detail_resource(
+    state: CommandGlobalState<'_>,
+    group: String,
+    api_version: String,
+    resource_plural: String,
+    name: String,
+    namespace: Option<String>,
+) -> Result<serde_json::Value, String> {
+    let state = state.lock().await;
+
+    let ar = kube::discovery::ApiResource {
+        group,
+        api_version,
+        plural: resource_plural,
+        version: "".to_string(),
+        kind: "".to_string(),
+    };
+    let api: Api<DynamicObject> = match namespace {
+        Some(ns) => Api::namespaced_with(state.kube_client.clone(), &ns, &ar),
+        None => Api::all_with(state.kube_client.clone(), &ar),
+    };
+
+    let obj = api.get(&name).await.map_err(|e| e.to_string())?;
+    serde_json::to_value(obj).map_err(|e| e.to_string())
 }
 
 /// Stops a running subscription by aborting the task associated with it.
@@ -61,6 +90,8 @@ async fn start_listening(
     api_version: String,
     resource_plural: String,
     subscription_id: i32,
+    name: Option<String>,
+    namespace: Option<String>,
     channel: Channel<ResourceListenEvent>
 ) -> Result<i32, String> {
     let mut state = state.lock().await;
@@ -72,7 +103,12 @@ async fn start_listening(
         version: "".to_string(),
         kind: "".to_string(),
     };
-    let api = Api::<DynamicObject>::all_with(state.kube_client.clone(), &ar);
+    let api: Api<DynamicObject> = if let Some(ns) = namespace {
+        Api::namespaced_with(state.kube_client.clone(), &ns, &ar)
+    } else {
+        Api::all_with(state.kube_client.clone(), &ar)
+    };
+
     let wc = watcher::Config::default();
 
     let join_handle = tokio::task::spawn(async move {
@@ -108,9 +144,14 @@ async fn start_listening(
                                 }
                             );
                         },
-                        _ => {
-                            // InitDone, Init
-                        }
+                        Event::Init => {
+                            eprintln!("[{}] Init event received", subscription_id);
+                            let _ = channel.send(ResourceListenEvent::Init);
+                        },
+                        Event::InitDone => {
+                            eprintln!("[{}] InitDone event received", subscription_id);
+                            let _ = channel.send(ResourceListenEvent::InitDone);
+                        },
                     }
                 }
                 Ok(None) => {
@@ -237,7 +278,8 @@ pub fn run() {
             list_api_resources,
             exec_raw,
             start_listening,
-            stop_listen_task
+            stop_listen_task,
+            detail_resource
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

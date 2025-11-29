@@ -10,8 +10,9 @@ import { discoverRows } from "./row-discovery";
 import { MagnifyingGlassIcon } from "@radix-ui/react-icons";
 import { formatKubeAge } from "./well-known-formatters";
 import { useResourceList } from "./subscriptions";
-import { useKubePathParams } from "./util/kube";
+import { makeKubePath, useKubePathParams } from "./util/kube";
 import { useKeyPress } from "./App";
+import { NavLink } from "react-router";
 
 export const ResourceTable = () => {
   const kubeParams = useKubePathParams();
@@ -75,7 +76,13 @@ export const ResourceTableInner = ({
           header: "Name",
           accessorFn: (row) => row.metadata?.name,
           Cell: ({ renderedCellValue, row }) => (
-            <Flex direction="column">
+            <NavLink
+              to={makeKubePath({
+                ...kubeParams,
+                namespace: row.original.metadata.namespace,
+                name: row.original.metadata.name,
+              })}
+            >
               {/* <Box>
               <Code>{item.metadata?.name ?? "unknown"}</Code>
             </Box>
@@ -84,7 +91,7 @@ export const ResourceTableInner = ({
               <Text>{item.metadata?.namespace}</Text>
             )} */}
               {renderedCellValue}
-            </Flex>
+            </NavLink>
           ),
         },
         ...discovered,
