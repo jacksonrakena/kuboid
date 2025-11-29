@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "autodiff",
+  "productName": "Autodiff",
   "version": "0.1.0",
   "identifier": "com.jacksonrakena.autodiff",
   "build": {
@@ -13,7 +13,9 @@
     "windows": [
       {
         "hiddenTitle": true,
-        "titleBarStyle": "Overlay"
+        "titleBarStyle": "Overlay",
+        "width": 1400,
+        "height": 750
       }
     ],
     "security": {
