@@ -1,7 +1,7 @@
 import { Flex, ScrollArea, Box, Text, TextField } from "@radix-ui/themes";
 import { invoke } from "@tauri-apps/api/core";
 import { useState, useEffect, useMemo } from "react";
-import { Link } from "react-router";
+import { Link, useMatch } from "react-router";
 import { useKubePathParams } from "../../util/kube/routes";
 import { makeKubePath } from "../../util/kube/routes";
 import { NoSelectStyle } from "../../util/platform";
@@ -43,6 +43,7 @@ export const executeSearch = (groups: ApiGroup[], query: string) => {
 };
 export const ResourceTypeList = () => {
   const kubeParams = useKubePathParams();
+  const isHome = useMatch("/app");
   const [search, setSearch] = useState("");
   const [apiResources, setApiResources] = useState<ApiGroup[]>([]);
   useEffect(() => {
@@ -117,6 +118,21 @@ export const ResourceTypeList = () => {
           }}
           gap="4"
         >
+          <Link
+            style={{
+              color: "black",
+              textDecoration: "unset",
+              backgroundColor: !!isHome ? "var(--gray-3)" : "transparent",
+              paddingLeft: "4px",
+              paddingTop: "2px",
+              paddingBottom: "2px",
+              borderRadius: "4px",
+              //borderLeft: "1px solid var(--accent-8)",
+            }}
+            to={"/app"}
+          >
+            Overview
+          </Link>
           {searchedResources.map((res) => (
             <Box key={res.name === "" ? "Core" : res.name}>
               <Text
@@ -143,6 +159,7 @@ export const ResourceTypeList = () => {
                         textDecoration: "unset",
                         backgroundColor:
                           kubeParams.resource_plural === r.plural &&
+                          kubeParams.api_version === r.api_version &&
                           kubeParams.group === res.name
                             ? "var(--gray-3)"
                             : "transparent",

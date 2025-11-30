@@ -17,6 +17,7 @@ import { OverviewPane } from "./panes/resource-info/panes/global/OverviewPane";
 import { EventsPane } from "./panes/resource-info/panes/global/EventsPane";
 import { Home } from ".";
 import { Settings } from "./settings";
+import { Overview } from "./overview";
 
 const router = createBrowserRouter([
   {
@@ -29,6 +30,11 @@ const router = createBrowserRouter([
     path: "/app",
     Component: App,
     children: [
+      {
+        index: true,
+        Component: Overview,
+        ErrorBoundary: RootErrorBoundary,
+      },
       {
         // Specific override for namespaces themselves, those special little namespaces :)
         path: "api/:api_version/namespaces/:name",
