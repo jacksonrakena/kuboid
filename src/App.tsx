@@ -7,7 +7,14 @@ import "@radix-ui/colors/blue-dark.css";
 import "@radix-ui/colors/green-dark.css";
 import "@radix-ui/colors/red-dark.css";
 import "@radix-ui/themes/styles.css";
-import { Button, DropdownMenu, Flex, IconButton } from "@radix-ui/themes";
+import {
+  Box,
+  Button,
+  DropdownMenu,
+  Flex,
+  Grid,
+  IconButton,
+} from "@radix-ui/themes";
 import { ResourceTypeList } from "./panes/resource-type-list/ResourceTypeList";
 import { Outlet, useNavigate } from "react-router";
 import { ArrowLeftIcon, ArrowRightIcon } from "@radix-ui/react-icons";
@@ -81,29 +88,36 @@ const StatusSection = () => {
   );
 };
 
+const LeftPane = () => {
+  return (
+    <Flex
+      gap="2"
+      direction={"column"}
+      style={{ borderRight: "1px solid var(--gray-6)", height: "100%" }}
+    >
+      <StatusSection />
+
+      <ResourceTypeList />
+    </Flex>
+  );
+};
+
 function App() {
   return (
-    <main className="container" style={{ height: "100vh" }}>
-      <Flex
-        style={{
-          overflow: "clip",
-          height: "100%",
-        }}
-      >
-        <Flex
-          gap="2"
-          direction={"column"}
-          style={{ borderRight: "1px solid var(--gray-6)" }}
-        >
-          <StatusSection />
+    // for those who are strong:
+    // <Box style={{ overflow: "clip" }}>
+    <>
+      <Flex style={{ height: "100vh" }}>
+        <div style={{ width: "300px", flexShrink: 0, height: "100%" }}>
+          <LeftPane />
+        </div>
 
-          <ResourceTypeList />
-        </Flex>
-        <Outlet />
+        <div style={{ flexGrow: "1", overflowX: "auto", height: "100%" }}>
+          <Outlet />
+        </div>
       </Flex>
-
       <QuickSwitch />
-    </main>
+    </>
   );
 }
 

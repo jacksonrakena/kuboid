@@ -76,16 +76,31 @@ export const ResourceTableInner = ({
     enableRowVirtualization: true,
     enableBottomToolbar: false,
     enableTopToolbar: false,
+    enableColumnActions: false,
 
-    mantineTableProps: {
-      striped: true,
+    mantineTableHeadRowProps: {
       style: {
-        border: "none",
+        boxShadow: "none",
       },
     },
+    // mantineTableProps: {
+    //   striped: true,
+    // },
+    // mantineTableProps: {
+    //   style: {
+    //     overscrollBehavior: "none",
+    //   },
+    // },
     mantinePaperProps: {
       withBorder: false,
+      style: {
+        // width: "100%",
+      },
+      shadow: undefined,
     },
+    // mantineTableContainerProps: {
+    //   width: "100%",
+    // },
     enableFullScreenToggle: false,
 
     //enableHiding: false,
@@ -99,7 +114,7 @@ export const ResourceTableInner = ({
     }
   }, [resources, table]);
   return (
-    <Flex direction="column" flexGrow={"1"}>
+    <Box flexGrow={"1"}>
       <ResourceToolbar
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}
@@ -107,11 +122,13 @@ export const ResourceTableInner = ({
         kubeParams={kubeParams}
         resources={resources}
       />
+      <MantineReactTable table={table} />
 
-      <ScrollArea>
-        <MantineReactTable table={table} />
-      </ScrollArea>
-    </Flex>
+      {/* <div style={{ maxWidth: "100%" }}> */}
+      {/* </div> */}
+      {/* <ScrollArea style={{ width: "100%" }}> */}
+      {/* </ScrollArea> */}
+    </Box>
   );
 };
 

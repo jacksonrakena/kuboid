@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router";
 import { useKubePathParams } from "../../util/kube/routes";
 import { makeKubePath } from "../../util/kube/routes";
+import { NoSelectStyle } from "../../util/platform";
 
 type ApiResource = {
   kind: string;
@@ -42,15 +43,16 @@ export const ResourceTypeList = () => {
 
   return (
     <ScrollArea
-      type="always"
       scrollbars="vertical"
-      style={{ height: "100%", paddingLeft: "8px", width: "250px" }}
+      style={{
+        ...NoSelectStyle,
+      }}
     >
-      {" "}
       <Flex
         direction="column"
         style={{
-          marginRight: "16px",
+          paddingLeft: "8px",
+          paddingRight: "16px",
           fontSize: "13px",
         }}
         gap="4"

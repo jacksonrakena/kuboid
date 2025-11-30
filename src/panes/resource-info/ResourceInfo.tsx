@@ -18,7 +18,7 @@ export const ResourcePage = ({
   const resource = useCachedResource(kubePathComponents);
 
   return (
-    <Flex direction={"column"} style={{ width: "100%" }}>
+    <Flex direction={"column"} style={{ width: "100%", height: "100%" }}>
       <Flex
         direction={"column"}
         data-tauri-drag-region
