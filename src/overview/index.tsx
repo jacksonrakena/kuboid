@@ -32,10 +32,10 @@ export const Overview = () => {
                 group: "",
               }}
               stateDefinitions={[
-                { name: "Active", color: "green" },
+                { name: "Active", color: "var(--green-9)" },
                 {
                   name: "Terminating",
-                  color: "red",
+                  color: "var(--red-9)",
                 },
               ]}
               getState={(i: KubernetesObject) => "Active"}
@@ -48,11 +48,11 @@ export const Overview = () => {
                 group: "",
               }}
               stateDefinitions={[
-                { name: "Bound", color: "green" },
-                { name: "Pending", color: "yellow" },
+                { name: "Bound", color: "var(--green-9)" },
+                { name: "Pending", color: "var(--yellow-11)" },
                 {
                   name: "Lost",
-                  color: "red",
+                  color: "var(--red-9)",
                 },
               ]}
               getState={(i: V1PersistentVolumeClaim) => {
@@ -78,8 +78,8 @@ export const Overview = () => {
                 group: "",
               }}
               stateDefinitions={[
-                { name: "Ready", color: "green" },
-                { name: "NotReady", color: "red" },
+                { name: "Ready", color: "var(--green-9)" },
+                { name: "NotReady", color: "var(--red-9)" },
               ]}
               getState={(i: KubernetesObject) => {
                 const conditions = (i as any).status?.conditions;
@@ -104,10 +104,10 @@ export const Overview = () => {
                 group: "apiextensions.k8s.io",
               }}
               stateDefinitions={[
-                { name: "Active", color: "green" },
+                { name: "Active", color: "var(--green-9)" },
                 {
                   name: "Terminating",
-                  color: "red",
+                  color: "var(--red-9)",
                 },
               ]}
               getState={(i: V1CustomResourceDefinition) => {
@@ -129,8 +129,8 @@ export const Overview = () => {
                 group: "apps",
               }}
               stateDefinitions={[
-                { name: "Ready", color: "green" },
-                { name: "NotReady", color: "red" },
+                { name: "Ready", color: "var(--green-9)" },
+                { name: "NotReady", color: "var(--red-9)" },
               ]}
               getState={(i: KubernetesObject) => {
                 const status = (i as any).status;
@@ -148,8 +148,8 @@ export const Overview = () => {
                 group: "apps",
               }}
               stateDefinitions={[
-                { name: "Ready", color: "green" },
-                { name: "NotReady", color: "red" },
+                { name: "Ready", color: "var(--green-9)" },
+                { name: "NotReady", color: "var(--red-9)" },
               ]}
               getState={(i: KubernetesObject) => {
                 const status = (i as any).status;
@@ -167,8 +167,8 @@ export const Overview = () => {
                 group: "apps",
               }}
               stateDefinitions={[
-                { name: "Ready", color: "green" },
-                { name: "NotReady", color: "red" },
+                { name: "Ready", color: "var(--green-9)" },
+                { name: "NotReady", color: "var(--red-9)" },
               ]}
               getState={(i: KubernetesObject) => {
                 const status = (i as any).status;
@@ -186,8 +186,8 @@ export const Overview = () => {
                 group: "batch",
               }}
               stateDefinitions={[
-                { name: "Active", color: "green" },
-                { name: "Suspended", color: "yellow" },
+                { name: "Active", color: "var(--green-9)" },
+                { name: "Suspended", color: "var(--yellow-11)" },
               ]}
               getState={(i: KubernetesObject) => {
                 const spec = (i as any).spec;
@@ -205,9 +205,9 @@ export const Overview = () => {
                 group: "batch",
               }}
               stateDefinitions={[
-                { name: "Complete", color: "green" },
-                { name: "Failed", color: "red" },
-                { name: "Running", color: "blue" },
+                { name: "Complete", color: "var(--green-9)" },
+                { name: "Failed", color: "var(--red-9)" },
+                { name: "Running", color: "var(--blue-9)" },
               ]}
               getState={(i: KubernetesObject) => {
                 const status = (i as any).status;
@@ -227,7 +227,7 @@ export const Overview = () => {
                 resource_plural: "resourcequotas",
                 group: "",
               }}
-              stateDefinitions={[{ name: "Active", color: "green" }]}
+              stateDefinitions={[{ name: "Active", color: "var(--green-9)" }]}
               getState={(i: KubernetesObject) => "Active"}
             />
           </Grid>
@@ -302,21 +302,21 @@ const ResourceCountCard = <T extends KubernetesObject>(props: {
               );
             })}
           </Box>
-          <Flex gap="2" wrap="wrap">
+          <Flex gap="2" wrap="wrap" direction={"column"}>
             {props.stateDefinitions.map((stateDef) => {
               const count = collectedStates[stateDef.name] || 0;
               return (
                 <Flex key={stateDef.name} align="center" gap="1">
-                  <Box
+                  {/* <Box
                     style={{
                       width: "12px",
                       height: "12px",
                       backgroundColor: stateDef.color,
                       borderRadius: "2px",
                     }}
-                  />
-                  <Text size="1">
-                    {stateDef.name}: {count}
+                  /> */}
+                  <Text size="1" style={{ color: stateDef.color }}>
+                    {count} {stateDef.name}
                   </Text>
                 </Flex>
               );
