@@ -14,6 +14,8 @@ import { useEffect, useMemo, useState } from "react";
 import { safeInvoke } from "./util/kube/requests";
 import { KubeConfig } from "@kubernetes/client-node";
 import { useNavigate } from "react-router";
+import { useAtom, useSetAtom } from "jotai";
+import { currentConfigAtom } from "./util/kube/context";
 
 export const DICEBEAR_STYLE = "glass";
 export const Home = () => {
@@ -29,6 +31,7 @@ export const Home = () => {
     })();
   }, []);
 
+  const setCurrentConfig = useSetAtom(currentConfigAtom);
   const kubeUsers = useMemo(() => contexts.flatMap((e) => e.users), [contexts]);
   const kubeContexts = useMemo(
     () => contexts.flatMap((e) => e.contexts),
@@ -133,6 +136,7 @@ export const Home = () => {
                 });
                 console.log(result);
                 if (result.success) {
+                  setCurrentConfig(contexts[0]);
                   setLoading(false);
                   navigate("/app");
                 }

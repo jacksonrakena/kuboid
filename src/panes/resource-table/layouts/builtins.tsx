@@ -10,7 +10,7 @@ export const Builtins = (params: KubeUrlComponents) => ({
       header: "Namespace",
       accessorFn: (row) => row.metadata?.namespace,
       Cell: ({ renderedCellValue }) => <>{renderedCellValue}</>,
-      maxSize: 60,
+      maxSize: 100,
     },
     {
       id: "metadata-name",

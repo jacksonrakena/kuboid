@@ -75,10 +75,19 @@ export const ResourceTableInner = ({
     enableColumnResizing: true,
     enableRowVirtualization: true,
     enableBottomToolbar: false,
+    enableTopToolbar: false,
+
     mantineTableProps: {
       striped: true,
+      style: {
+        border: "none",
+      },
+    },
+    mantinePaperProps: {
+      withBorder: false,
     },
     enableFullScreenToggle: false,
+
     //enableHiding: false,
   });
   useEffect(() => {
@@ -91,42 +100,78 @@ export const ResourceTableInner = ({
   }, [resources, table]);
   return (
     <Flex direction="column" flexGrow={"1"}>
-      <Flex
-        align="center"
-        gap="4"
-        data-tauri-drag-region
-        style={{ paddingTop: "16px", paddingBottom: "16px" }}
+      <ResourceToolbar
+        searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
+        lastEventTime={lastEventTime}
+        kubeParams={kubeParams}
+        resources={resources}
+      />
+
+      <ScrollArea>
+        <MantineReactTable table={table} />
+      </ScrollArea>
+    </Flex>
+  );
+};
+
+export const ResourceToolbar = ({
+  searchTerm,
+  setSearchTerm,
+  lastEventTime,
+  kubeParams,
+  resources,
+}: {
+  searchTerm: string;
+  setSearchTerm: React.Dispatch<React.SetStateAction<string>>;
+  lastEventTime: Date | null;
+  kubeParams: ReturnType<typeof useKubePathParams>;
+  resources: any[];
+}) => {
+  return (
+    <Flex
+      align="center"
+      gap="4"
+      data-tauri-drag-region
+      style={{
+        paddingTop: "16px",
+        paddingBottom: "4px",
+        paddingLeft: "16px",
+      }}
+    >
+      <TextField.Root
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.currentTarget.value)}
+        placeholder="Search..."
       >
-        <TextField.Root
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.currentTarget.value)}
-          // ref={ref}
-          placeholder="Search..."
+        <TextField.Slot>
+          <MagnifyingGlassIcon height="16" width="16" />
+        </TextField.Slot>
+      </TextField.Root>
+      <Box>
+        <Tooltip
+          content={`Last event: ${lastEventTime?.toString() ?? "unknown"}`}
         >
-          <TextField.Slot>
-            <MagnifyingGlassIcon height="16" width="16" />
-          </TextField.Slot>
-        </TextField.Root>
-        <Box>
-          <Tooltip
-            content={`Last event: ${lastEventTime?.toString() ?? "unknown"}`}
+          <Text
+            color="gray"
+            size={"2"}
+            unselectable="on"
+            data-tauri-drag-region
+            style={{
+              WebkitUserSelect: "none",
+              userSelect: "none",
+            }}
           >
-            <Text
-              color="gray"
-              size={"2"}
-              unselectable="on"
-              data-tauri-drag-region
-              style={{
-                WebkitUserSelect: "none",
-                userSelect: "none",
-              }}
-            >
-              {resources.length} {kubeParams.resource_plural}
-            </Text>
-          </Tooltip>
-        </Box>
-      </Flex>
-      <ContextMenu.Root>
+            {resources.length} {kubeParams.resource_plural}
+          </Text>
+        </Tooltip>
+      </Box>
+    </Flex>
+  );
+};
+
+/*
+      {/* <ContextMenu.Root>
         <ContextMenu.Trigger>
           <Box>test</Box>
         </ContextMenu.Trigger>
@@ -152,81 +197,5 @@ export const ResourceTableInner = ({
 
           <ContextMenu.Item color="red">Delete</ContextMenu.Item>
         </ContextMenu.Content>
-      </ContextMenu.Root>
-      <ScrollArea>
-        <MantineReactTable table={table} />
-
-        {/* <Table.Root size="1">
-          <Table.Header>
-            <Table.Row>
-              {defaultRows.map((row) => (
-                <Tooltip content={row.help ?? "none"} key={row.name}>
-                  <Table.ColumnHeaderCell>{row.name}</Table.ColumnHeaderCell>
-                </Tooltip>
-              ))}
-            </Table.Row>
-          </Table.Header>
-
-          <Table.Body>
-            {resources
-              .filter((r) => {
-                if (searchTerm === "") return true;
-                const term = searchTerm.toLowerCase();
-                return (
-                  r.metadata?.name?.toLowerCase().includes(term) ||
-                  (r.metadata?.namespace &&
-                    r.metadata?.namespace.toLowerCase().includes(term)) ||
-                  r.status?.phase?.toLowerCase().includes(term) ||
-                  humanize(r).toLowerCase().includes(term)
-                );
-              })
-              .map((pod) => (
-                <ContextMenu.Root>
-                  <ContextMenu.Trigger>
-                    <Table.Row key={pod.metadata?.name}>
-                      {defaultRows.map((row) => (
-                        <Table.Cell key={row.name}>
-                          {"render" in row
-                            ? row.render(pod)
-                            : JSON.stringify(
-                                row.path
-                                  .split(".")
-                                  .reduce(
-                                    (obj, key) => (obj ? obj[key] : "unknown"),
-                                    pod
-                                  )
-                              )}
-                        </Table.Cell>
-                      ))}
-                    </Table.Row>
-                  </ContextMenu.Trigger>
-                  <ContextMenu.Content>
-                    <ContextMenu.Item>Describe</ContextMenu.Item>
-                    <ContextMenu.Item>Edit</ContextMenu.Item>
-                    <ContextMenu.Item>Show</ContextMenu.Item>
-                    <ContextMenu.Sub>
-                      <ContextMenu.SubTrigger>Jump to</ContextMenu.SubTrigger>
-                      <ContextMenu.SubContent>
-                        <ContextMenu.Item>Owner (StatefulSet)</ContextMenu.Item>
-                        <ContextMenu.Item>Node</ContextMenu.Item>
-                      </ContextMenu.SubContent>
-                    </ContextMenu.Sub>
-                    <ContextMenu.Separator />
-                    <ContextMenu.Item>Logs</ContextMenu.Item>
-                    <ContextMenu.Item>Attach</ContextMenu.Item>
-                    <ContextMenu.Item>Shell</ContextMenu.Item>
-                    <ContextMenu.Separator />
-                    <ContextMenu.Item>Port forward</ContextMenu.Item>
-                    <ContextMenu.Item>Copy files</ContextMenu.Item>
-                    <ContextMenu.Separator />
-
-                    <ContextMenu.Item color="red">Delete</ContextMenu.Item>
-                  </ContextMenu.Content>
-                </ContextMenu.Root>
-              ))}
-          </Table.Body>
-        </Table.Root> */}
-      </ScrollArea>
-    </Flex>
-  );
-};
+      </ContextMenu.Root> 
+      */

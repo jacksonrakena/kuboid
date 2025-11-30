@@ -44,14 +44,14 @@ export const ResourceTypeList = () => {
     <ScrollArea
       type="always"
       scrollbars="vertical"
-      style={{ height: "100%", paddingLeft: "8px", maxWidth: "350px" }}
+      style={{ height: "100%", paddingLeft: "8px", width: "250px" }}
     >
       {" "}
       <Flex
         direction="column"
         style={{
           marginRight: "16px",
-          fontSize: "14px",
+          fontSize: "13px",
         }}
         gap="4"
       >
@@ -60,7 +60,6 @@ export const ResourceTypeList = () => {
             <Text
               style={{
                 color: "var(--gray-11)",
-                fontSize: "13px",
               }}
             >
               {res.name}
@@ -83,9 +82,11 @@ export const ResourceTypeList = () => {
                       backgroundColor:
                         kubeParams.resource_plural === r.plural &&
                         kubeParams.group === res.name
-                          ? "var(--blue-3)"
+                          ? "var(--gray-3)"
                           : "transparent",
                       paddingLeft: "4px",
+                      paddingTop: "2px",
+                      paddingBottom: "2px",
                       borderRadius: "4px",
                     }}
                     to={route}
