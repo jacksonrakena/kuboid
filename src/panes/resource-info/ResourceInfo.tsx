@@ -4,6 +4,7 @@ import { makeKubePath, useKubePathParams } from "../../util/kube/routes";
 import { Flex, Heading, TabNav, Text } from "@radix-ui/themes";
 import { NavLink, Outlet, useMatch } from "react-router";
 import { useCachedResource } from "../../util/kube/cache";
+import { WrappedLink } from "../../util/platform";
 
 export const ResourceInfo = () => {
   const kubePathComponents = useKubePathParams();
@@ -22,10 +23,10 @@ export const ResourcePage = ({
       <Flex
         direction={"column"}
         data-tauri-drag-region
-        style={{ padding: "4px" }}
+        style={{ padding: "16px" }}
       >
-        <Text data-tauri-drag-region color="gray" size="2">
-          <NavLink
+        <Text data-tauri-drag-region size="2">
+          <WrappedLink
             to={
               "/app" +
               makeKubePath({
@@ -36,11 +37,11 @@ export const ResourcePage = ({
             }
           >
             {kubePathComponents.resource_plural}
-          </NavLink>
+          </WrappedLink>
         </Text>
         <Heading data-tauri-drag-region>{resource?.metadata.name}</Heading>
       </Flex>
-      <TabNav.Root color="gray">
+      <TabNav.Root>
         <TabLink
           rootPath={makeKubePath(kubePathComponents)}
           route={""}

@@ -2,6 +2,7 @@ import { MRT_ColumnDef } from "mantine-react-table";
 import { formatKubeAge } from "../../../util/well-known-formatters";
 import { NavLink } from "react-router";
 import { KubeUrlComponents, makeKubePath } from "../../../util/kube/routes";
+import { WrappedLink } from "../../../util/platform";
 
 export const Builtins = (params: KubeUrlComponents) => ({
   Prepended: [
@@ -17,7 +18,7 @@ export const Builtins = (params: KubeUrlComponents) => ({
       header: "Name",
       accessorFn: (row) => row.metadata?.name,
       Cell: ({ renderedCellValue, row }) => (
-        <NavLink
+        <WrappedLink
           to={
             "/app" +
             makeKubePath({
@@ -28,7 +29,7 @@ export const Builtins = (params: KubeUrlComponents) => ({
           }
         >
           {renderedCellValue}
-        </NavLink>
+        </WrappedLink>
       ),
     },
   ] as MRT_ColumnDef<any>[],

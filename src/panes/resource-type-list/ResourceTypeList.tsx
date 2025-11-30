@@ -90,6 +90,7 @@ export const ResourceTypeList = () => {
                       paddingTop: "2px",
                       paddingBottom: "2px",
                       borderRadius: "4px",
+                      //borderLeft: "1px solid var(--accent-8)",
                     }}
                     to={route}
                   >

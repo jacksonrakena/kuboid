@@ -13,6 +13,7 @@ import { useKubePathParams } from "../../../../util/kube/routes";
 import { makeKubePath } from "../../../../util/kube/routes";
 import { formatKubeAge } from "../../../../util/well-known-formatters";
 import { NavLink } from "react-router";
+import { WrappedLink } from "../../../../util/platform";
 
 export const OverviewPane = () => {
   const params = useKubePathParams();
@@ -58,7 +59,7 @@ export const OverviewPane = () => {
               <DataList.Item>
                 <DataList.Label color="gray">Namespace</DataList.Label>
                 <DataList.Value>
-                  <NavLink
+                  <WrappedLink
                     to={
                       "/app" +
                       makeKubePath({
@@ -70,7 +71,7 @@ export const OverviewPane = () => {
                     }
                   >
                     {resource.metadata.namespace}
-                  </NavLink>
+                  </WrappedLink>
                 </DataList.Value>
               </DataList.Item>
             )}
@@ -113,7 +114,7 @@ const KeyValueExpander = ({ data }: { data: Record<string, string> }) => {
     <Flex direction="column" gap="1">
       {records.slice(0, 3).map(([key, value]) => (
         <Flex style={{ maxWidth: "250px" }}>
-          <Code color="gray" truncate>
+          <Code truncate>
             {key}: {value as string}
           </Code>
         </Flex>
@@ -122,7 +123,7 @@ const KeyValueExpander = ({ data }: { data: Record<string, string> }) => {
       {records.length > 0 && (
         <Popover.Root>
           <Popover.Trigger>
-            <Button variant="surface" color="gray" size={"1"}>
+            <Button variant="surface" size={"1"}>
               View all
             </Button>
           </Popover.Trigger>
@@ -133,7 +134,7 @@ const KeyValueExpander = ({ data }: { data: Record<string, string> }) => {
                   <Table.Row>
                     <Table.RowHeaderCell>{key}</Table.RowHeaderCell>
                     <Table.Cell>
-                      <Code color="gray">{value as string}</Code>
+                      <Code>{value as string}</Code>
                     </Table.Cell>
                   </Table.Row>
                 ))}
