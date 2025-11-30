@@ -2,14 +2,15 @@ import { Editor } from "@monaco-editor/react";
 
 import { useCachedResource } from "../../../../util/kube/cache";
 import { convert } from "@catalystic/json-to-yaml";
-import { useMemo, useState } from "react";
+import { useContext, useMemo, useState } from "react";
 import { Box, Flex, Kbd, Switch, Text } from "@radix-ui/themes";
 import { useKeyPress } from "../../../../util/keybinds";
 import { useKubePathParams } from "../../../../util/kube/routes";
+import { ResourceInfoPageContext } from "../../ResourceInfoContext";
 
 export const YAMLPane = () => {
   const kubePathComponents = useKubePathParams();
-  const resource = useCachedResource(kubePathComponents);
+  const { resource } = useContext(ResourceInfoPageContext);
   const [hideManagedFields, setHideManagedFields] = useState(true);
   const [decrypt, setDecrypt] = useState(false);
   const isDecryptable = kubePathComponents.resource_plural === "secrets";
@@ -38,7 +39,6 @@ export const YAMLPane = () => {
         metadata: { ...temporary.metadata, managedFields: undefined },
       };
     }
-    console.log(temporary);
     return convert(temporary);
   }, [resource, decrypt, isDecryptable, hideManagedFields]);
   return (

@@ -15,10 +15,13 @@ import { formatKubeAge } from "../../../../util/well-known-formatters";
 import { NavLink } from "react-router";
 import { WrappedLink } from "../../../../util/platform";
 import { TooltipKubeAge } from "../../../../components/TooltipKubeAge";
+import { useContext } from "react";
+import { ResourceInfoPageContext } from "../../ResourceInfoContext";
 
 export const OverviewPane = () => {
+  const ctx = useContext(ResourceInfoPageContext);
   const params = useKubePathParams();
-  const resource = useCachedResource(params);
+  const resource = ctx.resource;
   /**
    *       {
         "lastProbeTime": null,

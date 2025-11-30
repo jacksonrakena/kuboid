@@ -1,13 +1,16 @@
-import React from "react";
+import React, { createContext } from "react";
 
 import { makeKubePath, useKubePathParams } from "../../util/kube/routes";
-import { Flex, Heading, TabNav, Text } from "@radix-ui/themes";
+import { Box, Flex, Heading, TabNav, Text } from "@radix-ui/themes";
 import { NavLink, Outlet, useMatch } from "react-router";
-import { useCachedResource } from "../../util/kube/cache";
+import { useCachedResourceAndStartWatch } from "../../util/kube/cache";
 import { WrappedLink } from "../../util/platform";
+import { GenericKubernetesResource } from "../../util/kube/types";
+import { ResourceInfoPageContext } from "./ResourceInfoContext";
 
 export const ResourceInfo = () => {
   const kubePathComponents = useKubePathParams();
+  console.log("ResourceInfo render", kubePathComponents);
   return <ResourcePage kubePathComponents={kubePathComponents} />;
 };
 
@@ -16,7 +19,11 @@ export const ResourcePage = ({
 }: {
   kubePathComponents: ReturnType<typeof useKubePathParams>;
 }) => {
-  const resource = useCachedResource(kubePathComponents);
+  const resource = useCachedResourceAndStartWatch(kubePathComponents);
+
+  if (!resource) {
+    return <Box style={{ padding: "16px" }}>Resource unavailable in cache</Box>;
+  }
 
   return (
     <Flex direction={"column"} style={{ width: "100%", height: "100%" }}>
@@ -58,7 +65,9 @@ export const ResourcePage = ({
           header="Events"
         />
       </TabNav.Root>
-      <Outlet />
+      <ResourceInfoPageContext.Provider value={{ resource }}>
+        <Outlet />
+      </ResourceInfoPageContext.Provider>
     </Flex>
   );
 };

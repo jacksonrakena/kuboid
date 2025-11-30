@@ -8,11 +8,9 @@ import "@radix-ui/colors/green-dark.css";
 import "@radix-ui/colors/red-dark.css";
 import "@radix-ui/themes/styles.css";
 import {
-  Box,
   Button,
   DropdownMenu,
   Flex,
-  Grid,
   IconButton,
 } from "@radix-ui/themes";
 import { ResourceTypeList } from "./panes/resource-type-list/ResourceTypeList";
@@ -21,7 +19,6 @@ import { ArrowLeftIcon, ArrowRightIcon } from "@radix-ui/react-icons";
 import { QuickSwitch } from "./popups/QuickSwitch";
 import { useAtomValue } from "jotai";
 import { currentConfigAtom } from "./util/kube/context";
-import { NoSelect } from "./util/platform";
 
 const StatusSection = () => {
   const currentConfig = useAtomValue(currentConfigAtom);

@@ -699,6 +699,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "debug-ignore"
+version = "1.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ffe7ed1d93f4553003e20b629abe9085e1e81b1429520f897f8f8860bc6dfc21"
+
+[[package]]
 name = "deranged"
 version = "0.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2167,6 +2173,7 @@ dependencies = [
 name = "kuboid"
 version = "0.1.0"
 dependencies = [
+ "debug-ignore",
  "futures-util",
  "k8s-openapi",
  "kube",

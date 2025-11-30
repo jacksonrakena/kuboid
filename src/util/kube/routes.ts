@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useParams } from "react-router";
 
 export type KubeGroup = "api" | "apis";
@@ -47,24 +48,34 @@ export type KubeApisGroupPathParams = {
 export type KubePathParams = KubeCoreGroupPathParams | KubeApisGroupPathParams;
 export const useKubePathParams = (): KubeUrlComponents => {
   const params = useParams() as KubePathParams;
-  if (params.hasOwnProperty("api_group_domain")) {
-    const assertion = params as Partial<KubeApisGroupPathParams>;
+  const assertion = useMemo(() => {
+    if (params.hasOwnProperty("api_group_domain")) {
+      const assertion = params as Partial<KubeApisGroupPathParams>;
+      return {
+        group: assertion.api_group_domain!,
+        api_version:
+          assertion.api_group_domain + "/" + assertion.api_group_version!,
+        resource_plural: assertion.resource_plural!,
+        namespace: assertion.namespace,
+        name: assertion.name,
+      };
+    }
+
+    const assertion = params as Partial<KubeCoreGroupPathParams>;
     return {
-      group: assertion.api_group_domain!,
-      api_version:
-        assertion.api_group_domain + "/" + assertion.api_group_version!,
-      resource_plural: assertion.resource_plural!,
+      group: "",
+      api_version: assertion.api_version!,
+      resource_plural: assertion.resource_plural! ?? "namespaces",
       namespace: assertion.namespace,
       name: assertion.name,
     };
-  }
-
-  const assertion = params as Partial<KubeCoreGroupPathParams>;
-  return {
-    group: "",
-    api_version: assertion.api_version!,
-    resource_plural: assertion.resource_plural! ?? "namespaces",
-    namespace: assertion.namespace,
-    name: assertion.name,
-  };
+  }, [
+    params.name,
+    params.namespace,
+    params.api_version,
+    params.resource_plural,
+    params.api_group_version,
+    params.api_group_domain,
+  ]);
+  return assertion;
 };

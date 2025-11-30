@@ -4,12 +4,7 @@ import { makeKubePath } from "./routes";
 import { type KubeUrlComponents } from "./routes";
 import { useKubernetesResourceCache } from "./cache";
 import { useSetAtom } from "jotai";
-
-export interface ResourceWithId {
-  metadata: {
-    uid: string;
-  };
-}
+import { GenericKubernetesResource } from "./types";
 
 type InternalSubscriptionEvent<T> =
   | {
@@ -40,6 +35,8 @@ export const useResourceSubscription = <T,>(
       apiVersion: resource.api_version,
       resourcePlural: resource.resource_plural,
       channel,
+      namespace: resource.namespace,
+      name: resource.name,
     });
     return () => {
       console.log("Closing updates on ", subscription);
@@ -49,11 +46,11 @@ export const useResourceSubscription = <T,>(
   }, [resource]);
 };
 
-export type ResourceListState<T extends ResourceWithId> = {
+export type ResourceListState<T extends GenericKubernetesResource> = {
   resources: T[];
   lastEventTime: Date | null;
 };
-export const useResourceList = <T extends ResourceWithId>(
+export const useResourceList = <T extends GenericKubernetesResource>(
   resourceType: KubeUrlComponents
 ) => {
   const kubeCacheAtom = useKubernetesResourceCache(makeKubePath(resourceType));

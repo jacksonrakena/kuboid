@@ -1,24 +1,36 @@
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
-use k8s_openapi::api::core::v1::Pod;
 use kube::api::DynamicObject;
+use kube::config::{AuthInfo, KubeConfigOptions, Kubeconfig};
 use kube::discovery::ApiGroup;
-use kube::runtime::watcher::Event;
 use kube::runtime::watcher;
+use kube::runtime::watcher::{watch_object, Event};
 use kube::{Api, Client, Config, Discovery, Resource};
-use rand::SeedableRng;
 use serde::Serialize;
 use std::collections::HashMap;
-use std::sync::Arc;
-use kube::client::ClientBuilder;
-use kube::config::{AuthInfo, KubeConfigOptions, Kubeconfig};
+use std::fmt::Display;
+use futures_util::stream::BoxStream;
 use tauri::async_runtime::{Mutex, TokioJoinHandle};
-use tauri::http::{HeaderName, HeaderValue, Request, Uri};
+use tauri::http::{Request, Uri};
 use tauri::ipc::Channel;
-use tauri::{async_runtime, http, Manager, State};
+use tauri::{async_runtime, Manager, State};
+use debug_ignore::DebugIgnore;
 
 
-#[derive(Serialize,Clone)]
+impl Display for ResourceListenEvent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ResourceListenEvent::Init => write!(f, "Init"),
+            ResourceListenEvent::InitDone => write!(f, "InitDone"),
+            ResourceListenEvent::InitApply { .. } => write!(f, "InitApply"),
+            ResourceListenEvent::Apply { .. } => write!(f, "Apply"),
+            ResourceListenEvent::Delete { .. } => write!(f, "Delete"),
+            ResourceListenEvent::Error { message } => write!(f, "Error: {}", message),
+            ResourceListenEvent::SingleResourceNotFoundOrDeleted => write!(f, "SingleResourceNotFoundOrDeleted"),
+        }
+    }
+}
+#[derive(Serialize,Clone,Debug)]
 #[serde(rename_all = "camelCase", rename_all_fields = "camelCase", tag = "event", content = "data")]
 enum ResourceListenEvent {
     Init,
@@ -35,39 +47,44 @@ enum ResourceListenEvent {
     Error {
         message: String
     },
-    Close
+    SingleResourceNotFoundOrDeleted,
 }
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase", rename_all_fields = "camelCase", tag = "type", content = "context")]
-enum KubeClusterSource {
-    Inferred,
-    File(String),
-
+impl From<Event<DynamicObject>> for ResourceListenEvent {
+    fn from(value: Event<DynamicObject>) -> Self {
+        match value {
+            Event::Init => ResourceListenEvent::Init,
+            Event::InitDone => ResourceListenEvent::InitDone,
+            Event::InitApply(e) => ResourceListenEvent::InitApply {
+                resource: serde_json::to_value(e).unwrap(),
+            },
+            Event::Apply(e) =>
+                ResourceListenEvent::Apply {
+                    resource: serde_json::to_value(e).unwrap(),
+                },
+            Event::Delete(e) =>
+                ResourceListenEvent::Delete {
+                    resource: serde_json::to_value(e).unwrap(),
+                },
+        }
+    }
 }
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct KubeContextDetail {
-    pub source: KubeClusterSource,
-    pub cluster_url: String,
-    pub default_namespace: String,
-    pub auth_info: AuthInfo,
-    pub name: String,
-}
 
+/// Called by the client on startup to discover available kube contexts
 #[tauri::command]
 async fn list_kube_contexts(ctx: CommandGlobalState<'_>) -> Result<Vec<Kubeconfig>, ()> {
     let mut contexts: Vec<Kubeconfig> = Vec::new();
 
+    // Reads from KUBECONFIG env var or default location (~/.kube/config)
     if let Ok(r) = Kubeconfig::read() {
-
-            contexts.push(r)
-
+        contexts.push(r)
     }
     Ok(contexts)
 }
 
+/// Sets our state to use the client's desired kubeconfig
+/// (usually selected from the list provided by list_kube_contexts)
 #[tauri::command]
 async fn start(ctx: CommandGlobalState<'_>, kubeconfig: Kubeconfig) -> Result<(), String> {
     let mut state = ctx.lock().await;
@@ -79,6 +96,7 @@ async fn start(ctx: CommandGlobalState<'_>, kubeconfig: Kubeconfig) -> Result<()
     Ok(())
 }
 
+/// Retrieves detailed information about a specific Kubernetes resource.
 #[tauri::command]
 async fn detail_resource(
     state: CommandGlobalState<'_>,
@@ -156,57 +174,59 @@ async fn start_listening(
     let wc = watcher::Config::default();
 
     let join_handle = tokio::task::spawn(async move {
-        let watch = watcher(api, wc);
-        let mut items = watch.boxed();
-
-        loop {
-            let listen_result = items.try_next().await;
-            match listen_result {
-                Ok(Some(p)) => {
-                    match p {
-                        Event::InitApply(e) => {
-                            eprintln!("[{}] InitApply event received", subscription_id);
-                            let _ = channel.send(
-                                ResourceListenEvent::InitApply {
-                                    resource: serde_json::to_value(e).unwrap(),
-                                }
-                            );
+        match name {
+            Some(name) => {
+                let mut events = watch_object(api, &name).boxed();
+                loop {
+                    match events.try_next().await {
+                        // object updated, created, or found
+                        Ok(Some(Some(event))) => {
+                            let listen_event = ResourceListenEvent::Apply {
+                                resource: serde_json::to_value(event).unwrap(),
+                            };
+                            eprintln!("[{}] Sending event: {}", subscription_id, listen_event);
+                            let _ = channel.send(listen_event);
                         },
-                        Event::Apply(e) => {
-                            eprintln!("[{}] Apply event received", subscription_id);
-                            let _ = channel.send(
-                                ResourceListenEvent::Apply {
-                                    resource: serde_json::to_value(e).unwrap(),
-                                }
-                            );
+                        // object deleted or not found
+                        Ok(Some(None)) => {
+                            let listen_event = ResourceListenEvent::SingleResourceNotFoundOrDeleted;
+                            eprintln!("[{}] Sending event: {:?}", subscription_id, listen_event);
+                            let _ = channel.send(listen_event);
                         },
-                        Event::Delete(e) => {
-                            eprintln!("[{}] Delete event received", subscription_id);
-                            let _ = channel.send(
-                                ResourceListenEvent::Delete {
-                                    resource: serde_json::to_value(e).unwrap(),
-                                }
-                            );
-                        },
-                        Event::Init => {
-                            eprintln!("[{}] Init event received", subscription_id);
-                            let _ = channel.send(ResourceListenEvent::Init);
-                        },
-                        Event::InitDone => {
-                            eprintln!("[{}] InitDone event received", subscription_id);
-                            let _ = channel.send(ResourceListenEvent::InitDone);
-                        },
+                        Ok(None) => {
+                            let _ = channel.send(ResourceListenEvent::Error {
+                                message: "none value given from watcher".to_string()
+                            });
+                        }
+                        Err(e) => {
+                            let _ = channel.send(ResourceListenEvent::Error {
+                                message: e.to_string()
+                            });
+                        }
                     }
                 }
-                Ok(None) => {
-                    let _ = channel.send(ResourceListenEvent::Error {
-                        message: "none value given from watcher".to_string()
-                    });
-                }
-                Err(e) => {
-                    let _ = channel.send(ResourceListenEvent::Error {
-                        message: e.to_string()
-                    });
+            },
+            None => {
+                let mut events = watcher(api,wc).boxed();
+
+                loop {
+                    match events.try_next().await {
+                        Ok(Some(p)) => {
+                            let listen_event = ResourceListenEvent::from(p);
+                            eprintln!("[{}] Sending event: {}", subscription_id, listen_event);
+                            let _ = channel.send(listen_event);
+                        }
+                        Ok(None) => {
+                            let _ = channel.send(ResourceListenEvent::Error {
+                                message: "none value given from watcher".to_string()
+                            });
+                        }
+                        Err(e) => {
+                            let _ = channel.send(ResourceListenEvent::Error {
+                                message: e.to_string()
+                            });
+                        }
+                    }
                 }
             }
         }

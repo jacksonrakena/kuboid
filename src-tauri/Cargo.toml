@@ -28,3 +28,4 @@ schemars = { version = "1" }
 tokio = "1.48.0"
 futures-util = "0.3.31"
 rand = "0.8.5"
+debug-ignore = "1.0.5"
