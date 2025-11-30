@@ -59,12 +59,15 @@ export const OverviewPane = () => {
                 <DataList.Label color="gray">Namespace</DataList.Label>
                 <DataList.Value>
                   <NavLink
-                    to={makeKubePath({
-                      group: "",
-                      api_version: "v1",
-                      resource_plural: "namespaces",
-                      name: resource.metadata.namespace,
-                    })}
+                    to={
+                      "/app" +
+                      makeKubePath({
+                        group: "",
+                        api_version: "v1",
+                        resource_plural: "namespaces",
+                        name: resource.metadata.namespace,
+                      })
+                    }
                   >
                     {resource.metadata.namespace}
                   </NavLink>

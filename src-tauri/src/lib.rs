@@ -5,14 +5,17 @@ use kube::api::DynamicObject;
 use kube::discovery::ApiGroup;
 use kube::runtime::watcher::Event;
 use kube::runtime::watcher;
-use kube::{Api, Client, Discovery, Resource};
+use kube::{Api, Client, Config, Discovery, Resource};
 use rand::SeedableRng;
 use serde::Serialize;
 use std::collections::HashMap;
+use std::sync::Arc;
+use kube::client::ClientBuilder;
+use kube::config::{AuthInfo, KubeConfigOptions, Kubeconfig};
 use tauri::async_runtime::{Mutex, TokioJoinHandle};
-use tauri::http::{Request, Uri};
+use tauri::http::{HeaderName, HeaderValue, Request, Uri};
 use tauri::ipc::Channel;
-use tauri::{async_runtime, Manager, State};
+use tauri::{async_runtime, http, Manager, State};
 
 
 #[derive(Serialize,Clone)]
@@ -33,6 +36,47 @@ enum ResourceListenEvent {
         message: String
     },
     Close
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase", rename_all_fields = "camelCase", tag = "type", content = "context")]
+enum KubeClusterSource {
+    Inferred,
+    File(String),
+
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct KubeContextDetail {
+    pub source: KubeClusterSource,
+    pub cluster_url: String,
+    pub default_namespace: String,
+    pub auth_info: AuthInfo,
+    pub name: String,
+}
+
+#[tauri::command]
+async fn list_kube_contexts(ctx: CommandGlobalState<'_>) -> Result<Vec<Kubeconfig>, ()> {
+    let mut contexts: Vec<Kubeconfig> = Vec::new();
+
+    if let Ok(r) = Kubeconfig::read() {
+
+            contexts.push(r)
+
+    }
+    Ok(contexts)
+}
+
+#[tauri::command]
+async fn start(ctx: CommandGlobalState<'_>, kubeconfig: Kubeconfig) -> Result<(), String> {
+    let mut state = ctx.lock().await;
+    state.kube_client = Client::try_from(Config::from_custom_kubeconfig(kubeconfig.clone(), &KubeConfigOptions {
+        context: Some(kubeconfig.current_context.unwrap()),
+        cluster: None,
+        user: None,
+    }).await.unwrap()).map_err(|_| "invalid kubeconfig".to_string())?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -279,7 +323,9 @@ pub fn run() {
             exec_raw,
             start_listening,
             stop_listen_task,
-            detail_resource
+            detail_resource,
+            list_kube_contexts,
+            start
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -12,6 +12,21 @@ export async function http<T>(
   }
 }
 
+export async function safeInvoke<T>(
+  command: string,
+  args?: Record<string, unknown>
+): Promise<{ success: true; data: T } | { success: false; error: string }> {
+  try {
+    const data = await invoke(command, args);
+    if (typeof data === "string") {
+      return { success: false, error: data };
+    }
+    return { success: true, data: data as T };
+  } catch (e) {
+    return { success: false, error: String(e) };
+  }
+}
+
 export async function detailResource<T>(
   group: string,
   apiVersion: string,

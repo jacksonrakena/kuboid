@@ -15,10 +15,16 @@ import { Provider } from "jotai";
 import { YAMLPane } from "./panes/resource-info/panes/global/YAMLPane";
 import { OverviewPane } from "./panes/resource-info/panes/global/OverviewPane";
 import { EventsPane } from "./panes/resource-info/panes/global/EventsPane";
+import { Home } from ".";
 
 const router = createBrowserRouter([
   {
     path: "/",
+    Component: Home,
+    ErrorBoundary: RootErrorBoundary,
+  },
+  {
+    path: "/app",
     Component: App,
     children: [
       {
@@ -103,6 +109,7 @@ const router = createBrowserRouter([
         Component: ResourceTable,
       },
     ],
+    ErrorBoundary: RootErrorBoundary,
   },
 ]);
 
@@ -120,16 +127,16 @@ function RootErrorBoundary() {
   let error = useRouteError();
   if (isRouteErrorResponse(error)) {
     return (
-      <>
+      <div data-tauri-drag-region>
         <h1>
           {error.status} {error.statusText}
         </h1>
         <p>{error.data}</p>
-      </>
+      </div>
     );
   } else if (error instanceof Error) {
     return (
-      <div>
+      <div data-tauri-drag-region>
         <h1>Error</h1>
         <p>{error.message}</p>
         <p>The stack trace is:</p>

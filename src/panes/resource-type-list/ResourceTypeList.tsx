@@ -67,11 +67,13 @@ export const ResourceTypeList = () => {
             </Text>
             <Flex direction={"column"}>
               {res.resources.map((r) => {
-                const route = makeKubePath({
-                  api_version: r.api_version,
-                  group: res.name,
-                  resource_plural: r.plural,
-                });
+                const route =
+                  "/app" +
+                  makeKubePath({
+                    api_version: r.api_version,
+                    group: res.name,
+                    resource_plural: r.plural,
+                  });
                 return (
                   <Link
                     key={r.kind}

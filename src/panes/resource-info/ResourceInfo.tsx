@@ -26,11 +26,14 @@ export const ResourcePage = ({
       >
         <Text data-tauri-drag-region color="gray" size="2">
           <NavLink
-            to={makeKubePath({
-              ...kubePathComponents,
-              name: "",
-              namespace: "",
-            })}
+            to={
+              "/app" +
+              makeKubePath({
+                ...kubePathComponents,
+                name: "",
+                namespace: "",
+              })
+            }
           >
             {kubePathComponents.resource_plural}
           </NavLink>
@@ -68,7 +71,7 @@ const TabLink = ({
   route: string;
   header: React.ReactNode;
 }) => {
-  const isMatch = useMatch(rootPath + "/" + route);
+  const isMatch = useMatch("/app" + rootPath + "/" + route);
   return (
     <TabNav.Link asChild active={!!isMatch}>
       <NavLink to={route}>{header}</NavLink>

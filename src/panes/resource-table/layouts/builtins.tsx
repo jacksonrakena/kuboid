@@ -18,11 +18,14 @@ export const Builtins = (params: KubeUrlComponents) => ({
       accessorFn: (row) => row.metadata?.name,
       Cell: ({ renderedCellValue, row }) => (
         <NavLink
-          to={makeKubePath({
-            ...params,
-            namespace: row.original.metadata.namespace,
-            name: row.original.metadata.name,
-          })}
+          to={
+            "/app" +
+            makeKubePath({
+              ...params,
+              namespace: row.original.metadata.namespace,
+              name: row.original.metadata.name,
+            })
+          }
         >
           {renderedCellValue}
         </NavLink>
