@@ -9,6 +9,7 @@ use kube::{Api, Client, Config, Discovery, Resource};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::fmt::Display;
+use std::process::Command;
 use futures_util::stream::BoxStream;
 use tauri::async_runtime::{Mutex, TokioJoinHandle};
 use tauri::http::{Request, Uri};
@@ -268,6 +269,21 @@ impl XApiGroup {
     }
 }
 
+
+#[derive(Debug, serde::Serialize)]
+struct DebugInfo {
+    open_tasks: i32
+}
+
+#[tauri::command]
+async fn debug(state: CommandGlobalState<'_>) -> Result<DebugInfo, ()> {
+    let mut state = state.lock().await;
+
+    Ok(DebugInfo {
+        open_tasks: state.task_map.len() as i32
+    })
+}
+
 #[tauri::command]
 async fn list_api_resources(state: CommandGlobalState<'_>) -> Result<Vec<XApiGroup>, String> {
     let mut state = state.lock().await;
@@ -345,7 +361,8 @@ pub fn run() {
             stop_listen_task,
             detail_resource,
             list_kube_contexts,
-            start
+            start,
+            debug
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

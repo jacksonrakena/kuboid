@@ -7,15 +7,10 @@ import "@radix-ui/colors/blue-dark.css";
 import "@radix-ui/colors/green-dark.css";
 import "@radix-ui/colors/red-dark.css";
 import "@radix-ui/themes/styles.css";
-import {
-  Button,
-  DropdownMenu,
-  Flex,
-  IconButton,
-} from "@radix-ui/themes";
+import { Button, DropdownMenu, Flex, IconButton } from "@radix-ui/themes";
 import { ResourceTypeList } from "./panes/resource-type-list/ResourceTypeList";
 import { Outlet, useNavigate } from "react-router";
-import { ArrowLeftIcon, ArrowRightIcon } from "@radix-ui/react-icons";
+import { ArrowLeftIcon, ArrowRightIcon, GearIcon } from "@radix-ui/react-icons";
 import { QuickSwitch } from "./popups/QuickSwitch";
 import { useAtomValue } from "jotai";
 import { currentConfigAtom } from "./util/kube/context";
@@ -70,6 +65,14 @@ const StatusSection = () => {
           </DropdownMenu.Trigger>
           <DropdownMenu.Content color="gray">
             <DropdownMenu.Label>Other contexts</DropdownMenu.Label>
+            <DropdownMenu.Separator />
+            <DropdownMenu.Item
+              onSelect={() => {
+                navigate("/settings");
+              }}
+            >
+              <GearIcon /> Settings
+            </DropdownMenu.Item>
             <DropdownMenu.Separator />
             <DropdownMenu.Item
               onSelect={() => {

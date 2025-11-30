@@ -62,7 +62,13 @@ export const Home = () => {
       >
         <Box></Box>
         <Box>
-          <IconButton variant="ghost" color="gray" onClick={() => {}}>
+          <IconButton
+            variant="ghost"
+            color="gray"
+            onClick={() => {
+              navigate("/settings");
+            }}
+          >
             <GearIcon />
           </IconButton>
         </Box>

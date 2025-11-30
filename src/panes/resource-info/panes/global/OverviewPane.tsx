@@ -19,9 +19,7 @@ import { useContext } from "react";
 import { ResourceInfoPageContext } from "../../ResourceInfoContext";
 
 export const OverviewPane = () => {
-  const ctx = useContext(ResourceInfoPageContext);
-  const params = useKubePathParams();
-  const resource = ctx.resource;
+  const { resource } = useContext(ResourceInfoPageContext);
   /**
    *       {
         "lastProbeTime": null,

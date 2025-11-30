@@ -16,6 +16,7 @@ import { YAMLPane } from "./panes/resource-info/panes/global/YAMLPane";
 import { OverviewPane } from "./panes/resource-info/panes/global/OverviewPane";
 import { EventsPane } from "./panes/resource-info/panes/global/EventsPane";
 import { Home } from ".";
+import { Settings } from "./settings";
 
 const router = createBrowserRouter([
   {
@@ -23,6 +24,7 @@ const router = createBrowserRouter([
     Component: Home,
     ErrorBoundary: RootErrorBoundary,
   },
+  { path: "/settings", Component: Settings, ErrorBoundary: RootErrorBoundary },
   {
     path: "/app",
     Component: App,

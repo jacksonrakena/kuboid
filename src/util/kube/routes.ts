@@ -46,6 +46,11 @@ export type KubeApisGroupPathParams = {
   namespace?: string;
 };
 export type KubePathParams = KubeCoreGroupPathParams | KubeApisGroupPathParams;
+
+/**
+ * Extracts the Kubernetes path components from the current route params.
+ * Stable between renders and route changes, if none of the relevant params change.
+ */
 export const useKubePathParams = (): KubeUrlComponents => {
   const params = useParams() as KubePathParams;
   const assertion = useMemo(() => {
@@ -70,11 +75,21 @@ export const useKubePathParams = (): KubeUrlComponents => {
       name: assertion.name,
     };
   }, [
+    /**
+     * These parameters all affect the returned value,
+     * but because useParams() can change if other unrelated route params change,
+     * we need to explicitly list out only the ones we care about.
+     *
+     * They don't exist in all cases so we have to use ts-expect-error to suppress errors.
+     */
     params.name,
     params.namespace,
+    //@ts-expect-error
     params.api_version,
     params.resource_plural,
+    //@ts-expect-error
     params.api_group_version,
+    //@ts-expect-error
     params.api_group_domain,
   ]);
   return assertion;

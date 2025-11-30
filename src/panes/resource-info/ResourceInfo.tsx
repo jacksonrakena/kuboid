@@ -1,24 +1,14 @@
-import React, { createContext } from "react";
+import React from "react";
 
 import { makeKubePath, useKubePathParams } from "../../util/kube/routes";
 import { Box, Flex, Heading, TabNav, Text } from "@radix-ui/themes";
 import { NavLink, Outlet, useMatch } from "react-router";
 import { useCachedResourceAndStartWatch } from "../../util/kube/cache";
 import { WrappedLink } from "../../util/platform";
-import { GenericKubernetesResource } from "../../util/kube/types";
 import { ResourceInfoPageContext } from "./ResourceInfoContext";
 
 export const ResourceInfo = () => {
   const kubePathComponents = useKubePathParams();
-  console.log("ResourceInfo render", kubePathComponents);
-  return <ResourcePage kubePathComponents={kubePathComponents} />;
-};
-
-export const ResourcePage = ({
-  kubePathComponents,
-}: {
-  kubePathComponents: ReturnType<typeof useKubePathParams>;
-}) => {
   const resource = useCachedResourceAndStartWatch(kubePathComponents);
 
   if (!resource) {
