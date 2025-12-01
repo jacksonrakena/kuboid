@@ -1,6 +1,6 @@
-import { Box, Flex, Text, TextField, Tooltip } from "@radix-ui/themes";
+import { Box, Flex, Table, Text, TextField, Tooltip } from "@radix-ui/themes";
 import { useEffect, useMemo, useRef, useState } from "react";
-
+import { AgGridReact } from "ag-grid-react";
 import {
   MantineReactTable,
   useMantineReactTable,
@@ -12,6 +12,14 @@ import { useResourceList } from "../../util/kube/subscriptions";
 import { makeKubePath, useKubePathParams } from "../../util/kube/routes";
 import { useKeyPress } from "../../util/keybinds";
 import { Builtins } from "./layouts/builtins";
+// import {
+//   AllCommunityModule,
+//   ModuleRegistry,
+//   themeBalham,
+// } from "ag-grid-community";
+
+// // Register all Community features
+// ModuleRegistry.registerModules([AllCommunityModule]);
 
 export const ResourceTable = () => {
   const kubeParams = useKubePathParams();
@@ -131,6 +139,21 @@ export const ResourceTableInner = ({
         resources={resources}
       />
       <MantineReactTable table={table} />
+      {/* <div style={{ width: "100%", height: "500px" }}>
+        {" "}
+        <AgGridReact
+          // columnDefs={rows.map((col) => ({
+          //   valueGetter: ({ data }) => col.accessorFn(data),
+          //   cellRenderer: col.Cell
+          //     ? ({ value }) => col.Cell({ cell: value })
+          //     : undefined,
+          //   headerName: col.header,
+          // }))}
+          columnDefs={rows}
+          rowData={resources}
+          theme={themeBalham}
+        /> 
+      </div> */}
 
       {/* <div style={{ maxWidth: "100%" }}> */}
       {/* </div> */}

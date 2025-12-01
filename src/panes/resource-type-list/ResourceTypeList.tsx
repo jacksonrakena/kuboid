@@ -123,7 +123,7 @@ export const ResourceTypeList = () => {
             style={{
               color: "black",
               textDecoration: "unset",
-              backgroundColor: !!isHome ? "var(--gray-3)" : "transparent",
+              backgroundColor: isHome ? "var(--gray-3)" : "transparent",
               paddingLeft: "4px",
               paddingTop: "2px",
               paddingBottom: "2px",

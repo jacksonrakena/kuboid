@@ -132,7 +132,7 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
 );
 
 function RootErrorBoundary() {
-  let error = useRouteError();
+  const error = useRouteError();
   if (isRouteErrorResponse(error)) {
     return (
       <div data-tauri-drag-region>
