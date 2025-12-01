@@ -43,6 +43,7 @@ export const executeSearch = (groups: ApiGroup[], query: string) => {
 };
 export const ResourceTypeList = () => {
   const kubeParams = useKubePathParams();
+  
   const isHome = useMatch("/app");
   const [search, setSearch] = useState("");
   const [apiResources, setApiResources] = useState<ApiGroup[]>([]);

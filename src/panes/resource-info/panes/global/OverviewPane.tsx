@@ -128,8 +128,8 @@ const KeyValueExpander = ({ data }: { data: Record<string, string> }) => {
               View all
             </Button>
           </Popover.Trigger>
-          <Popover.Content width="600px">
-            <Table.Root variant="surface">
+          <Popover.Content width="600px" maxHeight={"450px"}>
+            <Table.Root variant="surface" size="1">
               <Table.Body>
                 {records.map(([key, value]) => (
                   <Table.Row>

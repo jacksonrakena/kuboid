@@ -1,5 +1,5 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
-import { useEffect, useState } from "react";
+import { startTransition, useEffect, useState } from "react";
 import { makeKubePath } from "./routes";
 import { type KubeUrlComponents } from "./routes";
 import { useKubernetesResourceCache } from "./cache";
@@ -25,7 +25,7 @@ export const useResourceSubscription = <T,>(
     };
     const channel = new Channel<InternalSubscriptionEvent<T>>();
     channel.onmessage = (msg) => {
-      console.log(msg);
+      // console.log(msg);
       callback(msg);
     };
 
@@ -70,34 +70,40 @@ export const useResourceList = <T extends GenericKubernetesResource>(
       case "initDone":
         break;
       case "initApply":
-        setResources((prev) => [...prev, event.data.resource]);
-        setResourcesInCache((prev) => [...prev, event.data.resource]);
+        startTransition(() => {
+          setResources((prev) => [...prev, event.data.resource]);
+          setResourcesInCache((prev) => [...prev, event.data.resource]);
+        });
         break;
       case "apply":
-        setResources((prev) => [
-          ...prev.filter(
-            (e) => e.metadata.uid !== event.data.resource.metadata.uid
-          ),
-          event.data.resource,
-        ]);
-        setResourcesInCache((prev) => [
-          ...prev.filter(
-            (e) => e.metadata.uid !== event.data.resource.metadata.uid
-          ),
-          event.data.resource,
-        ]);
+        startTransition(() => {
+          setResources((prev) => [
+            ...prev.filter(
+              (e) => e.metadata.uid !== event.data.resource.metadata.uid
+            ),
+            event.data.resource,
+          ]);
+          setResourcesInCache((prev) => [
+            ...prev.filter(
+              (e) => e.metadata.uid !== event.data.resource.metadata.uid
+            ),
+            event.data.resource,
+          ]);
+        });
         break;
       case "delete":
-        setResources((prev) =>
-          prev.filter(
-            (e) => e.metadata.uid !== event.data.resource.metadata.uid
-          )
-        );
-        setResourcesInCache((prev) =>
-          prev.filter(
-            (e) => e.metadata.uid !== event.data.resource.metadata.uid
-          )
-        );
+        startTransition(() => {
+          setResources((prev) =>
+            prev.filter(
+              (e) => e.metadata.uid !== event.data.resource.metadata.uid
+            )
+          );
+          setResourcesInCache((prev) =>
+            prev.filter(
+              (e) => e.metadata.uid !== event.data.resource.metadata.uid
+            )
+          );
+        });
         break;
     }
   });

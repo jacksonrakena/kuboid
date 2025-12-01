@@ -1,10 +1,4 @@
-import {
-  Box,
-  Flex,
-  Text,
-  TextField,
-  Tooltip,
-} from "@radix-ui/themes";
+import { Box, Flex, Text, TextField, Tooltip } from "@radix-ui/themes";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -15,7 +9,7 @@ import {
 import { discoverRows } from "./layouts/autodiscovery";
 import { MagnifyingGlassIcon } from "@radix-ui/react-icons";
 import { useResourceList } from "../../util/kube/subscriptions";
-import { useKubePathParams } from "../../util/kube/routes";
+import { makeKubePath, useKubePathParams } from "../../util/kube/routes";
 import { useKeyPress } from "../../util/keybinds";
 import { Builtins } from "./layouts/builtins";
 
@@ -43,20 +37,32 @@ export const ResourceTableInner = ({
   );
   const { resources, lastEventTime } = useResourceList<any>(kubeParams);
 
-  const [asyncColumns, setAsyncColumns] = useState<MRT_ColumnDef<any>[]>([]);
+  const [asyncColumns, setAsyncColumns] = useState<MRT_ColumnDef<any>[] | null>(
+    null
+  );
 
   useEffect(() => {
+    setAsyncColumns(null);
+  }, [kubeParams]);
+  useEffect(() => {
     (async () => {
-      const discovered =
-        resources.length > 0 ? await discoverRows(kubeParams) : [];
-      setAsyncColumns(discovered);
+      if (resources.length > 0 && asyncColumns === null) {
+        const discovered = await discoverRows(kubeParams);
+        setAsyncColumns(discovered);
+      }
     })();
-  }, [resources]);
+  }, [resources, kubeParams]);
+  const PREPEND_BLACKLIST = ["/api/v1/events"];
+  const APPEND_BLACKLIST = ["/api/v1/events"];
   const rows = useMemo(
     () => [
-      ...Builtins(kubeParams).Prepended,
-      ...asyncColumns,
-      ...Builtins(kubeParams).Appended,
+      ...(PREPEND_BLACKLIST.includes(makeKubePath(kubeParams))
+        ? []
+        : Builtins(kubeParams).Prepended),
+      ...(asyncColumns ?? []),
+      ...(APPEND_BLACKLIST.includes(makeKubePath(kubeParams))
+        ? []
+        : Builtins(kubeParams).Appended),
     ],
     [asyncColumns]
   );
@@ -75,6 +81,10 @@ export const ResourceTableInner = ({
     enableBottomToolbar: false,
     enableTopToolbar: false,
     enableColumnActions: false,
+    rowVirtualizerProps: {
+      overscan: 100,
+      estimateSize: () => 42,
+    },
 
     mantineTableHeadRowProps: {
       style: {

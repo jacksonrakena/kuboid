@@ -1,7 +1,9 @@
-import { V1Pod } from "@kubernetes/client-node";
+import { CoreV1Event, V1Pod } from "@kubernetes/client-node";
 import { Badge } from "@radix-ui/themes";
 import { formatKubeAge } from "../../../util/well-known-formatters";
 import { MRT_ColumnDef } from "mantine-react-table";
+import { Commons } from "./builtins";
+import { TooltipKubeAge } from "../../../components/TooltipKubeAge";
 
 export const WellKnownTableLayouts: {
   [key: string]: {
@@ -133,6 +135,56 @@ export const WellKnownTableLayouts: {
           else if (phase === "Terminating") color = "yellow";
           return <Badge color={color}>{phase}</Badge>;
         },
+      },
+    ],
+  },
+  "/api/v1/events": {
+    columns: [
+      {
+        id: "metadata-age",
+        header: "Last Seen",
+        accessorFn: (row: CoreV1Event) => row.lastTimestamp,
+        //filterVariant: "date-range",
+        Cell: ({ cell }) => (
+          <TooltipKubeAge creationTimestamp={cell.getValue() as string} />
+        ),
+        maxSize: 80,
+      },
+      {
+        id: "type",
+        header: "Type",
+        accessorFn: (item: CoreV1Event) => item.type || "Normal",
+        Cell: ({ cell }) => {
+          const type = (cell.getValue() as string) || "Normal";
+          let color: "green" | "red" = "green";
+          if (type === "Warning") color = "red";
+          return <Badge color={color}>{type}</Badge>;
+        },
+        maxSize: 60,
+      },
+      {
+        id: "reason",
+        header: "Reason",
+        accessorFn: (item: CoreV1Event) => item.reason || "Unknown",
+        Cell: ({ cell }) => {
+          const type = (cell.getValue() as string) || "Unknown";
+          return <>{type}</>;
+        },
+        maxSize: 150,
+      },
+      {
+        id: "involvedObject",
+        header: "Object",
+        accessorFn: (item: CoreV1Event) =>
+          `${item.involvedObject.kind || "Unknown"}/${
+            item.involvedObject.name || "Unknown"
+          }`,
+      },
+      {
+        id: "message",
+        header: "Message",
+        accessorFn: (item: CoreV1Event) => item.message || "",
+        size: 400,
       },
     ],
   },

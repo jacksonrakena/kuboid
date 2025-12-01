@@ -13,10 +13,15 @@ import { Outlet, useNavigate } from "react-router";
 import { ArrowLeftIcon, ArrowRightIcon, GearIcon } from "@radix-ui/react-icons";
 import { QuickSwitch } from "./popups/QuickSwitch";
 import { useAtomValue } from "jotai";
-import { currentConfigAtom } from "./util/kube/context";
+import {
+  currentConfigAtom,
+  currentContextAtom,
+  currentKubeContextAtom,
+} from "./util/kube/context";
 
 const StatusSection = () => {
-  const currentConfig = useAtomValue(currentConfigAtom);
+  const currentContext = useAtomValue(currentContextAtom);
+  const allconfigs = useAtomValue(currentKubeContextAtom);
   const navigate = useNavigate();
   return (
     <Flex
@@ -59,14 +64,24 @@ const StatusSection = () => {
         <DropdownMenu.Root>
           <DropdownMenu.Trigger>
             <Button variant="ghost" size="3" color="gray" highContrast>
-              {/* @ts-expect-error */}
-              {currentConfig?.["current-context"]}
+              {currentContext}
               <DropdownMenu.TriggerIcon />
             </Button>
           </DropdownMenu.Trigger>
           <DropdownMenu.Content color="gray">
-            <DropdownMenu.Label>Other contexts</DropdownMenu.Label>
-            <DropdownMenu.Separator />
+            {(allconfigs?.merged?.contexts.length ?? 0) > 1 && (
+              <>
+                <DropdownMenu.Label>Other contexts</DropdownMenu.Label>
+                {(allconfigs?.merged?.contexts ?? [])
+                  .filter((ctx) => ctx.name !== currentContext)
+                  .map((ctx) => (
+                    <DropdownMenu.Item key={ctx.name}>
+                      {ctx.name}
+                    </DropdownMenu.Item>
+                  ))}
+                <DropdownMenu.Separator />
+              </>
+            )}
             <DropdownMenu.Item
               onSelect={() => {
                 navigate("/settings");
@@ -113,7 +128,14 @@ function App() {
           <LeftPane />
         </div>
 
-        <div style={{ flexGrow: "1", overflowX: "auto", height: "100%" }}>
+        <div
+          style={{
+            flexGrow: "1",
+            overflowX: "auto",
+            height: "100%",
+            overflowY: "hidden",
+          }}
+        >
           <Outlet />
         </div>
       </Flex>

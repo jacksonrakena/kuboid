@@ -13,16 +13,29 @@ import { useEffect, useMemo, useState } from "react";
 import { safeInvoke } from "./util/kube/requests";
 import { KubeConfig } from "@kubernetes/client-node";
 import { useNavigate } from "react-router";
-import { useSetAtom } from "jotai";
-import { currentConfigAtom } from "./util/kube/context";
+import { useAtom, useSetAtom } from "jotai";
+import {
+  currentConfigAtom,
+  currentContextAtom,
+  currentKubeContextAtom,
+} from "./util/kube/context";
 
+export type KubeConfigInfo = {
+  merged?: KubeConfig;
+  sources: {
+    contexts: string[];
+    origin: {
+      type: "environmentOrDefaultPath";
+    };
+  }[];
+};
 export const DICEBEAR_STYLE = "glass";
 export const Home = () => {
   const navigate = useNavigate();
-  const [contexts, setContexts] = useState<KubeConfig[]>([]);
+  const [contexts, setContexts] = useAtom(currentKubeContextAtom);
   useEffect(() => {
     (async () => {
-      const result = await safeInvoke<KubeConfig[]>("list_kube_contexts");
+      const result = await safeInvoke<KubeConfigInfo>("list_kube_contexts");
       console.log(result);
       if (result.success) {
         setContexts(result.data);
@@ -31,10 +44,7 @@ export const Home = () => {
   }, []);
 
   const setCurrentConfig = useSetAtom(currentConfigAtom);
-  const kubeContexts = useMemo(
-    () => contexts.flatMap((e) => e.contexts),
-    [contexts]
-  );
+  const setCurrentContext = useSetAtom(currentContextAtom);
 
   const [loading, setLoading] = useState(false);
 
@@ -91,37 +101,34 @@ export const Home = () => {
               </Box>
             </Flex>
 
-            <Flex direction={"column"} gap="6">
-              <RadioCards.Root
-                value={selectedContext}
-                onValueChange={(e) => setSelectedContext(e)}
-                columns={{ initial: "1", sm: "3" }}
-              >
-                {kubeContexts.map((ctx) => {
-                  return (
-                    <RadioCards.Item key={ctx.name} value={ctx.name}>
-                      <Flex align="center" gap="3">
-                        <Avatar
-                          src={`https://api.dicebear.com/9.x/${DICEBEAR_STYLE}/svg?seed=${ctx.name}`}
-                          alt={ctx.name}
-                          size="3"
-                          fallback={""}
-                        />
-                        <Box>
-                          <Text as="div" size="2" weight="bold">
-                            {ctx.name}
-                          </Text>
-                          <Text as="div" size="2" color="gray">
-                            {/* @ts-expect-error */}
-                            {ctx.context.user}
-                          </Text>
-                        </Box>
-                      </Flex>
-                    </RadioCards.Item>
-                  );
-                })}
-              </RadioCards.Root>
-            </Flex>
+            <RadioCards.Root
+              value={selectedContext}
+              onValueChange={(e) => setSelectedContext(e)}
+            >
+              {(contexts?.merged?.contexts ?? []).map((ctx) => {
+                return (
+                  <RadioCards.Item key={ctx.name} value={ctx.name}>
+                    <Flex gap="3" align="end">
+                      <Avatar
+                        src={`https://api.dicebear.com/9.x/${DICEBEAR_STYLE}/svg?seed=${ctx.name}`}
+                        alt={ctx.name}
+                        size="3"
+                        fallback={""}
+                      />
+                      <Box>
+                        <Text as="div" size="2" weight="bold">
+                          {ctx.name}
+                        </Text>
+                        <Text as="div" size="2" color="gray">
+                          {/* @ts-expect-error */}
+                          {ctx.context.user}@{ctx.context.cluster}
+                        </Text>
+                      </Box>
+                    </Flex>
+                  </RadioCards.Item>
+                );
+              })}
+            </RadioCards.Root>
           </Flex>
           {/* <Box></Box> */}
         </Flex>
@@ -133,11 +140,12 @@ export const Home = () => {
               setLoading(true);
               (async () => {
                 const result = await safeInvoke("start", {
-                  kubeconfig: contexts[0],
+                  contextName: selectedContext,
                 });
                 console.log(result);
                 if (result.success) {
-                  setCurrentConfig(contexts[0]);
+                  setCurrentConfig(contexts?.merged ?? null);
+                  setCurrentContext(selectedContext);
                   setLoading(false);
                   navigate("/app");
                 }

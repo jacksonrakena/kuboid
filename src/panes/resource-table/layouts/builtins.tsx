@@ -44,3 +44,15 @@ export const Builtins = (params: KubeUrlComponents) => ({
     },
   ] as MRT_ColumnDef<any>[],
 });
+
+export const Commons: { [key: string]: MRT_ColumnDef<any> } = {
+  Age: {
+    id: "metadata-age",
+    header: "Age",
+    accessorFn: (row) => new Date(row.metadata?.creationTimestamp),
+    filterVariant: "date-range",
+    Cell: ({ cell }) => (
+      <TooltipKubeAge creationTimestamp={cell.getValue() as string} />
+    ),
+  },
+};

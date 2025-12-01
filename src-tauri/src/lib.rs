@@ -3,12 +3,13 @@ use futures_util::TryStreamExt;
 use kube::api::DynamicObject;
 use kube::config::{AuthInfo, KubeConfigOptions, Kubeconfig};
 use kube::discovery::ApiGroup;
-use kube::runtime::watcher;
-use kube::runtime::watcher::{watch_object, Event};
+use kube::runtime::{watcher, WatchStreamExt};
+use kube::runtime::watcher::{watch_object, Event, InitialListStrategy, ListSemantic};
 use kube::{Api, Client, Config, Discovery, Resource};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::fmt::Display;
+use std::fs::exists;
 use std::process::Command;
 use futures_util::stream::BoxStream;
 use tauri::async_runtime::{Mutex, TokioJoinHandle};
@@ -71,30 +72,82 @@ impl From<Event<DynamicObject>> for ResourceListenEvent {
     }
 }
 
+#[derive(Serialize,Clone,Debug)]
+#[serde(rename_all = "camelCase", rename_all_fields = "camelCase", tag = "type", content = "info")]
+enum KubeConfigOrigin {
+    EnvironmentOrDefaultPath
+}
+
+
+#[derive(Serialize,Clone,Debug)]
+#[serde(rename_all = "camelCase")]
+struct ContextSourceInfo {
+    contexts: Vec<String>,
+    origin: KubeConfigOrigin
+}
+
+#[derive(Serialize,Clone,Debug)]
+#[serde(rename_all = "camelCase")]
+struct KubeConfigInfo {
+    merged: Option<Kubeconfig>,
+    sources: Vec<ContextSourceInfo>
+}
+
 
 /// Called by the client on startup to discover available kube contexts
 #[tauri::command]
-async fn list_kube_contexts(ctx: CommandGlobalState<'_>) -> Result<Vec<Kubeconfig>, ()> {
-    let mut contexts: Vec<Kubeconfig> = Vec::new();
+async fn list_kube_contexts(ctx: CommandGlobalState<'_>) -> Result<KubeConfigInfo, ()> {
+    let mut kci = KubeConfigInfo {
+        merged: None,
+        sources: Vec::new()
+    };
 
     // Reads from KUBECONFIG env var or default location (~/.kube/config)
     if let Ok(r) = Kubeconfig::read() {
-        contexts.push(r)
+        match kci.merged {
+            Some(existing) => {
+                if let Ok(new_merged) = existing.clone().merge(r) {
+                    kci.merged = Some(new_merged);
+                } else {
+                    // if we can't merge, just keep the existing one
+                    kci.merged = Some(existing);
+                }
+            },
+            None => {
+                let context_names: Vec<String> = r.contexts.iter().map(|c|c.name.clone()).collect();
+                kci.merged = Some(r);
+                kci.sources.push(ContextSourceInfo {
+                    contexts: context_names,
+                    origin: KubeConfigOrigin::EnvironmentOrDefaultPath
+                });
+            }
+        }
     }
-    Ok(contexts)
+    let mut state = ctx.lock().await;
+
+    state.kubeconfig = kci.merged.clone();
+    Ok(kci)
 }
 
 /// Sets our state to use the client's desired kubeconfig
 /// (usually selected from the list provided by list_kube_contexts)
 #[tauri::command]
-async fn start(ctx: CommandGlobalState<'_>, kubeconfig: Kubeconfig) -> Result<(), String> {
+async fn start(ctx: CommandGlobalState<'_>, context_name: String) -> Result<(), String> {
     let mut state = ctx.lock().await;
-    state.kube_client = Client::try_from(Config::from_custom_kubeconfig(kubeconfig.clone(), &KubeConfigOptions {
-        context: Some(kubeconfig.current_context.unwrap()),
-        cluster: None,
-        user: None,
-    }).await.unwrap()).map_err(|_| "invalid kubeconfig".to_string())?;
-    Ok(())
+
+    match &state.kubeconfig {
+        Some(kubeconfig) => {
+            state.kube_client = Client::try_from(Config::from_custom_kubeconfig(kubeconfig.clone(), &KubeConfigOptions {
+                context: Some(context_name),
+                cluster: None,
+                user: None,
+            }).await.unwrap()).map_err(|_| "invalid kubeconfig".to_string())?;
+            Ok(())
+        }
+        None => {
+            Err("kubeconfig not ready".parse().unwrap())
+        }
+    }
 }
 
 /// Retrieves detailed information about a specific Kubernetes resource.
@@ -172,12 +225,12 @@ async fn start_listening(
         Api::all_with(state.kube_client.clone(), &ar)
     };
 
-    let wc = watcher::Config::default();
+    let mut wc = watcher::Config::default().streaming_lists();
 
     let join_handle = tokio::task::spawn(async move {
         match name {
             Some(name) => {
-                let mut events = watch_object(api, &name).boxed();
+                let mut events = watch_object(api, &name).default_backoff().boxed();
                 loop {
                     match events.try_next().await {
                         // object updated, created, or found
@@ -185,13 +238,11 @@ async fn start_listening(
                             let listen_event = ResourceListenEvent::Apply {
                                 resource: serde_json::to_value(event).unwrap(),
                             };
-                            eprintln!("[{}] Sending event: {}", subscription_id, listen_event);
                             let _ = channel.send(listen_event);
                         },
                         // object deleted or not found
                         Ok(Some(None)) => {
                             let listen_event = ResourceListenEvent::SingleResourceNotFoundOrDeleted;
-                            eprintln!("[{}] Sending event: {:?}", subscription_id, listen_event);
                             let _ = channel.send(listen_event);
                         },
                         Ok(None) => {
@@ -208,13 +259,12 @@ async fn start_listening(
                 }
             },
             None => {
-                let mut events = watcher(api,wc).boxed();
+                let mut events = watcher(api,wc).default_backoff().boxed();
 
                 loop {
                     match events.try_next().await {
                         Ok(Some(p)) => {
                             let listen_event = ResourceListenEvent::from(p);
-                            eprintln!("[{}] Sending event: {}", subscription_id, listen_event);
                             let _ = channel.send(listen_event);
                         }
                         Ok(None) => {
@@ -334,6 +384,7 @@ async fn exec_raw(state: CommandGlobalState<'_>, path: String) -> Result<String,
 }
 
 struct GlobalState {
+    kubeconfig: Option<Kubeconfig>,
     kube_client: Client,
     kube_discovery: Option<Discovery>,
     task_map: HashMap<i32, TokioJoinHandle<()>>,
@@ -352,6 +403,7 @@ pub fn run() {
                     kube_client: client.clone(),
                     kube_discovery: Some(Discovery::new(client)),
                     task_map: HashMap::new(),
+                    kubeconfig: None
                 }));
             });
             Ok(())
