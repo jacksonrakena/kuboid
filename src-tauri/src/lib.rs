@@ -11,6 +11,7 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::fs::exists;
 use std::process::Command;
+use std::sync::MutexGuard;
 use futures_util::stream::BoxStream;
 use tauri::async_runtime::{Mutex, TokioJoinHandle};
 use tauri::http::{Request, Uri};
@@ -135,6 +136,7 @@ async fn list_kube_contexts(ctx: CommandGlobalState<'_>) -> Result<KubeConfigInf
 async fn start(ctx: CommandGlobalState<'_>, context_name: String) -> Result<(), String> {
     let mut state = ctx.lock().await;
 
+    kill_all_tasks(&mut state);
     match &state.kubeconfig {
         Some(kubeconfig) => {
             state.kube_client = Client::try_from(Config::from_custom_kubeconfig(kubeconfig.clone(), &KubeConfigOptions {
@@ -178,6 +180,31 @@ async fn detail_resource(
     serde_json::to_value(obj).map_err(|e| e.to_string())
 }
 
+fn kill_all_tasks(
+    state: &mut tokio::sync::MutexGuard<GlobalState>,
+) {
+    let task_ids: Vec<i32> = state.task_map.keys().cloned().collect();
+    for task_id in task_ids {
+        kill_task_internal(state, task_id);
+    }
+}
+
+fn kill_task_internal(
+    state: &mut tokio::sync::MutexGuard<GlobalState>,
+    task_id: i32
+) -> Option<()> {
+    match state.task_map.remove(&task_id) {
+        Some(handle) => {
+            eprintln!("[{}] Stopping task with handle {}", task_id, handle.id());
+            TokioJoinHandle::abort(&handle);
+            Some(())
+        }
+        None => {
+            eprintln!("[{}] No task found to abort", task_id);
+            None
+        }
+    }
+}
 /// Stops a running subscription by aborting the task associated with it.
 #[tauri::command]
 async fn stop_listen_task(
@@ -186,17 +213,7 @@ async fn stop_listen_task(
 ) -> Result<(), String> {
     let mut state = state.lock().await;
 
-    match state.task_map.remove(&task_id) {
-        Some(handle) => {
-            eprintln!("[{}] Stopping task with handle {}", task_id, handle.id());
-            TokioJoinHandle::abort(&handle);
-            Ok(())
-        }
-        None => {
-            eprintln!("[{}] No task found to abort", task_id);
-            Err(format!("[{}] No task found to abort", task_id))
-        }
-    }
+    kill_task_internal(&mut state, task_id).ok_or("no such task".to_string())
 }
 
 #[tauri::command]

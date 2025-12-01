@@ -82,7 +82,7 @@ export const ResourceTableInner = ({
     enableTopToolbar: false,
     enableColumnActions: false,
     rowVirtualizerProps: {
-      overscan: 100,
+      overscan: 40,
       estimateSize: () => 42,
     },
 
@@ -113,14 +113,14 @@ export const ResourceTableInner = ({
 
     //enableHiding: false,
   });
-  useEffect(() => {
-    if (resources.length > 0) {
-      table.setColumnVisibility((d) => ({
-        ...d,
-        "metadata-namespace": !!resources[0].metadata.namespace,
-      }));
-    }
-  }, [resources, table]);
+  // useEffect(() => {
+  //   if (resources.length > 0) {
+  //     table.setColumnVisibility((d) => ({
+  //       ...d,
+  //       "metadata-namespace": !!resources[0].metadata.namespace,
+  //     }));
+  //   }
+  // }, [resources, table]);
   return (
     <Box flexGrow={"1"}>
       <ResourceToolbar
