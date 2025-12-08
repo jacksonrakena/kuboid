@@ -194,9 +194,9 @@ fn kill_task_internal(
     task_id: i32
 ) -> Option<()> {
     match state.task_map.remove(&task_id) {
-        Some(handle) => {
-            eprintln!("[{}] Stopping task with handle {}", task_id, handle.id());
-            TokioJoinHandle::abort(&handle);
+        Some(task_handle) => {
+            eprintln!("[{}] Stopping task with handle {}", task_id, task_handle.handle.id());
+            TokioJoinHandle::abort(&task_handle.handle);
             Some(())
         }
         None => {
@@ -216,6 +216,21 @@ async fn stop_listen_task(
     kill_task_internal(&mut state, task_id).ok_or("no such task".to_string())
 }
 
+#[derive(Clone, Serialize, Debug)]
+struct TaskMetadata {
+    id: i32,
+    group: String,
+    api_version: String,
+    resource_plural: String,
+    name: Option<String>,
+    namespace: Option<String>,
+}
+
+struct TaskHandle {
+    handle: TokioJoinHandle<()>,
+    metadata: TaskMetadata
+}
+
 #[tauri::command]
 async fn start_listening(
     state: CommandGlobalState<'_>,
@@ -230,22 +245,23 @@ async fn start_listening(
     let mut state = state.lock().await;
 
     let ar = kube::discovery::ApiResource {
-        group,
-        api_version,
-        plural: resource_plural,
+        group: group.clone(),
+        api_version: api_version.clone(),
+        plural: resource_plural.clone(),
         version: "".to_string(),
         kind: "".to_string(),
     };
-    let api: Api<DynamicObject> = if let Some(ns) = namespace {
-        Api::namespaced_with(state.kube_client.clone(), &ns, &ar)
+    let api: Api<DynamicObject> = if let Some(ns) = &namespace {
+        Api::namespaced_with(state.kube_client.clone(), ns, &ar)
     } else {
         Api::all_with(state.kube_client.clone(), &ar)
     };
 
     let mut wc = watcher::Config::default().streaming_lists();
 
+    let name0 = name.clone();
     let join_handle = tokio::task::spawn(async move {
-        match name {
+        match name0 {
             Some(name) => {
                 let mut events = watch_object(api, &name).default_backoff().boxed();
                 loop {
@@ -300,7 +316,20 @@ async fn start_listening(
         }
     });
     eprintln!("[{}] Started task with handle {} ({})", subscription_id, join_handle.id(), DynamicObject::url_path(&ar, None));
-    state.task_map.insert(subscription_id, join_handle);
+
+    let metadata = TaskMetadata {
+        id: subscription_id,
+        group,
+        api_version,
+        resource_plural,
+        name,
+        namespace,
+    };
+
+    state.task_map.insert(subscription_id, TaskHandle {
+        handle: join_handle,
+        metadata
+    });
     Ok(subscription_id)
 }
 
@@ -342,15 +371,19 @@ impl XApiGroup {
 
 #[derive(Debug, serde::Serialize)]
 struct DebugInfo {
-    open_tasks: i32
+    open_tasks: i32,
+    tasks: Vec<TaskMetadata>
 }
 
 #[tauri::command]
 async fn debug(state: CommandGlobalState<'_>) -> Result<DebugInfo, ()> {
-    let mut state = state.lock().await;
+    let state = state.lock().await;
+
+    let tasks: Vec<TaskMetadata> = state.task_map.values().map(|t| t.metadata.clone()).collect();
 
     Ok(DebugInfo {
-        open_tasks: state.task_map.len() as i32
+        open_tasks: state.task_map.len() as i32,
+        tasks
     })
 }
 
@@ -404,7 +437,7 @@ struct GlobalState {
     kubeconfig: Option<Kubeconfig>,
     kube_client: Client,
     kube_discovery: Option<Discovery>,
-    task_map: HashMap<i32, TokioJoinHandle<()>>,
+    task_map: HashMap<i32, TaskHandle>,
 }
 
 type CommandGlobalState<'a> = State<'a, Mutex<GlobalState>>;
