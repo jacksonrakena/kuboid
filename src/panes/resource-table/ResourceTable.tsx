@@ -11,6 +11,7 @@ import { useResourceList } from "../../util/kube/subscriptions";
 import { makeKubePath, useKubePathParams } from "../../util/kube/routes";
 import { useKeyPress } from "../../util/keybinds";
 import { Builtins } from "./layouts/builtins";
+import { useCachedResource, useCachedResourceList } from "../../util/kube/cache";
 // import {
 //   AllCommunityModule,
 //   ModuleRegistry,
@@ -43,6 +44,7 @@ export const ResourceTableInner = ({
     { noEffectWhileInTextInput: false }
   );
   const { resources, lastEventTime } = useResourceList<any>(kubeParams);
+  //const resources = useCachedResourceList(kubeParams) ?? [];
 
   const [asyncColumns, setAsyncColumns] = useState<MRT_ColumnDef<any>[] | null>(
     null

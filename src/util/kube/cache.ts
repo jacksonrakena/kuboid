@@ -1,4 +1,4 @@
-import { atom, useAtomValue, useSetAtom } from "jotai";
+import { atom, useAtomValue } from "jotai";
 import { makeKubePath } from "./routes";
 import { KubeUrlComponents } from "./routes";
 import { useResourceSubscription } from "./subscriptions";
@@ -53,26 +53,21 @@ export const useCachedResource = (kubePathComponents: KubeUrlComponents) => {
   return resource;
 };
 
+export const useCachedResourceList = (kubePathComponents: KubeUrlComponents) => {
+  const cachedResources = useAtomValue(kubernetesResourceAtom);
+  const resourceType = {
+    ...kubePathComponents,
+    name: "",
+    namespace: "",
+  };
+  const resourcesOfType = cachedResources[makeKubePath(resourceType)];
+  return resourcesOfType;
+}
+
 export const useCachedResourceAndStartWatch = (
   kubePathComponents: KubeUrlComponents
 ) => {
   const resource = useCachedResource(kubePathComponents);
-  const kubeCacheAtom = useKubernetesResourceCache(
-    makeKubePath({ ...kubePathComponents, name: "", namespace: "" })
-  );
-  const setResourcesInCache = useSetAtom(kubeCacheAtom);
-  useResourceSubscription<GenericKubernetesResource>(
-    kubePathComponents,
-    (event) => {
-      if (event.event === "apply") {
-        setResourcesInCache((prev) => [
-          ...prev.filter(
-            (e) => e.metadata.uid !== event.data.resource.metadata.uid
-          ),
-          event.data.resource,
-        ]);
-      }
-    }
-  );
+  useResourceSubscription(kubePathComponents);
   return resource;
 };

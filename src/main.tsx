@@ -18,6 +18,7 @@ import { EventsPane } from "./panes/resource-info/panes/global/EventsPane";
 import { Home } from ".";
 import { Settings } from "./settings";
 import { Overview } from "./overview";
+import { ResourceSubscriptionProvider } from "./util/kube/SubscriptionContext";
 
 const router = createBrowserRouter([
   {
@@ -125,7 +126,9 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <Theme accentColor="blue">
       <Provider>
-        <RouterProvider router={router} />
+        <ResourceSubscriptionProvider>
+          <RouterProvider router={router} />
+        </ResourceSubscriptionProvider>
       </Provider>
     </Theme>
   </React.StrictMode>

@@ -1,111 +1,56 @@
-import { Channel, invoke } from "@tauri-apps/api/core";
-import { startTransition, useEffect, useState } from "react";
-import { makeKubePath } from "./routes";
-import { type KubeUrlComponents } from "./routes";
-import { useKubernetesResourceCache } from "./cache";
-import { useSetAtom } from "jotai";
+import { useEffect, useMemo, useState } from "react";
+import { makeKubePath, type KubeUrlComponents } from "./routes";
+import { useCachedResourceList } from "./cache";
 import { GenericKubernetesResource } from "./types";
+import { useSubscriptionContext } from "./SubscriptionContext";
 
-type InternalSubscriptionEvent<T> =
-  | {
-      event: "apply" | "delete" | "initApply";
-      data: { resource: T };
-    }
-  | { event: "init" | "initDone" };
 
-export const useResourceSubscription = <T,>(
-  resource: KubeUrlComponents,
-  callback: (event: InternalSubscriptionEvent<T>) => void
+
+/**
+ * Ensures a backend subscription is active for the given resource.
+ * Does not return data. Use useCachedResourceList to get data.
+ */
+export const useResourceSubscription = (
+  resource: KubeUrlComponents
 ) => {
-  useEffect(() => {
-    const subscriptionId = Math.floor(Math.random() * 99999999);
-    const subscription = {
-      ...resource,
-      subscriptionId: subscriptionId,
-    };
-    const channel = new Channel<InternalSubscriptionEvent<T>>();
-    channel.onmessage = (msg) => {
-      // console.log(msg);
-      callback(msg);
-    };
+  const { subscribe } = useSubscriptionContext();
+  const key = makeKubePath(resource);
 
-    console.log("Listening for updates", subscription);
-    invoke("start_listening", {
-      ...subscription,
-      apiVersion: resource.api_version,
-      resourcePlural: resource.resource_plural,
-      channel,
-      namespace: resource.namespace,
-      name: resource.name,
-    });
+  // Stabilize the resource object so we don't resubscribe on every render
+  // if the path components haven't changed.
+  const stableResource = useMemo(() => resource, [key]);
+
+  useEffect(() => {
+    const unsubscribe = subscribe(stableResource);
     return () => {
-      console.log("Closing updates on ", subscription);
-      invoke("stop_listen_task", { taskId: subscriptionId });
-      channel.onmessage = () => {};
+      unsubscribe();
     };
-  }, [resource]);
+  }, [stableResource, subscribe]);
 };
 
 export type ResourceListState<T extends GenericKubernetesResource> = {
   resources: T[];
   lastEventTime: Date | null;
 };
+
 export const useResourceList = <T extends GenericKubernetesResource>(
   resourceType: KubeUrlComponents
 ) => {
-  const kubeCacheAtom = useKubernetesResourceCache(makeKubePath(resourceType));
-  const setResourcesInCache = useSetAtom(kubeCacheAtom);
-  const [resources, setResources] = useState<T[]>([]);
+  // Ensure subscription is active
+  useResourceSubscription(resourceType);
+
+  // Read from global cache
+  const cached = useCachedResourceList(resourceType) as T[] | undefined;
+
+  // Return stable empty array if undefined
+  const resources = useMemo(() => cached || [], [cached]);
+
   const [lastTime, setLastTime] = useState<Date | null>(null);
+
+  // update lastTime when resources change
   useEffect(() => {
-    setResources([]);
     setLastTime(new Date());
-  }, [resourceType]);
-  useResourceSubscription<T>(resourceType, (event) => {
-    setLastTime(new Date());
-    switch (event.event) {
-      case "init":
-        setResourcesInCache(() => []);
-        break;
-      case "initDone":
-        break;
-      case "initApply":
-        startTransition(() => {
-          setResources((prev) => [...prev, event.data.resource]);
-          setResourcesInCache((prev) => [...prev, event.data.resource]);
-        });
-        break;
-      case "apply":
-        startTransition(() => {
-          setResources((prev) => [
-            ...prev.filter(
-              (e) => e.metadata.uid !== event.data.resource.metadata.uid
-            ),
-            event.data.resource,
-          ]);
-          setResourcesInCache((prev) => [
-            ...prev.filter(
-              (e) => e.metadata.uid !== event.data.resource.metadata.uid
-            ),
-            event.data.resource,
-          ]);
-        });
-        break;
-      case "delete":
-        startTransition(() => {
-          setResources((prev) =>
-            prev.filter(
-              (e) => e.metadata.uid !== event.data.resource.metadata.uid
-            )
-          );
-          setResourcesInCache((prev) =>
-            prev.filter(
-              (e) => e.metadata.uid !== event.data.resource.metadata.uid
-            )
-          );
-        });
-        break;
-    }
-  });
+  }, [resources]);
+
   return { resources, lastEventTime: lastTime };
 };
