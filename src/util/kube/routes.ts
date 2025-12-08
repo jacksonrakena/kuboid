@@ -53,44 +53,24 @@ export type KubePathParams = KubeCoreGroupPathParams | KubeApisGroupPathParams;
  */
 export const useKubePathParams = (): KubeUrlComponents => {
   const params = useParams() as KubePathParams;
-  const assertion = useMemo(() => {
-    if (params.hasOwnProperty("api_group_domain")) {
-      const assertion = params as Partial<KubeApisGroupPathParams>;
-      return {
-        group: assertion.api_group_domain!,
-        api_version:
-          assertion.api_group_domain + "/" + assertion.api_group_version!,
-        resource_plural: assertion.resource_plural!,
-        namespace: assertion.namespace,
-        name: assertion.name,
-      };
-    }
-
-    const assertion = params as Partial<KubeCoreGroupPathParams>;
+  if (params.hasOwnProperty("api_group_domain")) {
+    const assertion = params as Partial<KubeApisGroupPathParams>;
     return {
-      group: "",
-      api_version: assertion.api_version!,
-      resource_plural: assertion.resource_plural! ?? "namespaces",
+      group: assertion.api_group_domain!,
+      api_version:
+        assertion.api_group_domain + "/" + assertion.api_group_version!,
+      resource_plural: assertion.resource_plural!,
       namespace: assertion.namespace,
       name: assertion.name,
     };
-  }, [
-    /**
-     * These parameters all affect the returned value,
-     * but because useParams() can change if other unrelated route params change,
-     * we need to explicitly list out only the ones we care about.
-     *
-     * They don't exist in all cases so we have to use ts-expect-error to suppress errors.
-     */
-    params.name,
-    params.namespace,
-    //@ts-expect-error
-    params.api_version,
-    params.resource_plural,
-    //@ts-expect-error
-    params.api_group_version,
-    //@ts-expect-error
-    params.api_group_domain,
-  ]);
-  return assertion;
+  }
+
+  const assertion = params as Partial<KubeCoreGroupPathParams>;
+  return {
+    group: "",
+    api_version: assertion.api_version!,
+    resource_plural: assertion.resource_plural! ?? "namespaces",
+    namespace: assertion.namespace,
+    name: assertion.name,
+  };
 };

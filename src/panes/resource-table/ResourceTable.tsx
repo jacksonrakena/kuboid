@@ -1,6 +1,5 @@
 import { Box, Flex, Table, Text, TextField, Tooltip } from "@radix-ui/themes";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AgGridReact } from "ag-grid-react";
 import {
   MantineReactTable,
   useMantineReactTable,
@@ -90,7 +89,8 @@ export const ResourceTableInner = ({
     enableTopToolbar: false,
     enableColumnActions: false,
     rowVirtualizerProps: {
-      overscan: 40,
+      //overscan: 25,
+      overscan: 5,
       estimateSize: () => 42,
     },
 
@@ -99,38 +99,33 @@ export const ResourceTableInner = ({
         boxShadow: "none",
       },
     },
-    // mantineTableProps: {
-    //   striped: true,
-    // },
-    // mantineTableProps: {
-    //   style: {
-    //     overscrollBehavior: "none",
-    //   },
-    // },
-    mantinePaperProps: {
-      withBorder: false,
-      style: {
-        // width: "100%",
-      },
-      shadow: undefined,
-    },
-    // mantineTableContainerProps: {
-    //   width: "100%",
-    // },
+    mantinePaperProps: useMemo(
+      () => ({
+        withBorder: false,
+        style: {
+          height: "100%",
+          display: "flex",
+          flexDirection: "column",
+        },
+        shadow: undefined,
+      }),
+      []
+    ),
+    mantineTableContainerProps: useMemo(
+      () => ({
+        style: {
+          flexGrow: 1,
+          overflowY: "auto",
+          overscrollBehavior: "none",
+        },
+      }),
+      []
+    ),
     enableFullScreenToggle: false,
-
-    //enableHiding: false,
   });
-  // useEffect(() => {
-  //   if (resources.length > 0) {
-  //     table.setColumnVisibility((d) => ({
-  //       ...d,
-  //       "metadata-namespace": !!resources[0].metadata.namespace,
-  //     }));
-  //   }
-  // }, [resources, table]);
+
   return (
-    <Box flexGrow={"1"}>
+    <Flex direction="column" style={{ height: "100%" }}>
       <ResourceToolbar
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}
@@ -138,28 +133,10 @@ export const ResourceTableInner = ({
         kubeParams={kubeParams}
         resources={resources}
       />
-      <MantineReactTable table={table} />
-      {/* <div style={{ width: "100%", height: "500px" }}>
-        {" "}
-        <AgGridReact
-          // columnDefs={rows.map((col) => ({
-          //   valueGetter: ({ data }) => col.accessorFn(data),
-          //   cellRenderer: col.Cell
-          //     ? ({ value }) => col.Cell({ cell: value })
-          //     : undefined,
-          //   headerName: col.header,
-          // }))}
-          columnDefs={rows}
-          rowData={resources}
-          theme={themeBalham}
-        /> 
-      </div> */}
-
-      {/* <div style={{ maxWidth: "100%" }}> */}
-      {/* </div> */}
-      {/* <ScrollArea style={{ width: "100%" }}> */}
-      {/* </ScrollArea> */}
-    </Box>
+      <Box flexGrow={"1"} style={{ minHeight: 0 }}>
+        <MantineReactTable table={table} />
+      </Box>
+    </Flex>
   );
 };
 

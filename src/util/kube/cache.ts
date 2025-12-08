@@ -3,30 +3,35 @@ import { makeKubePath } from "./routes";
 import { KubeUrlComponents } from "./routes";
 import { useResourceSubscription } from "./subscriptions";
 import { GenericKubernetesResource } from "./types";
+import { useMemo } from "react";
 
 export const kubernetesResourceAtom = atom<{
   [key: string]: GenericKubernetesResource[];
 }>({});
 
 export const useKubernetesResourceCache = (key: string) => {
-  const resourceAtom = atom(
-    (get) => {
-      const cache = get(kubernetesResourceAtom);
-      return cache[key] || [];
-    },
-    (
-      get,
-      set,
-      updateFn: (
-        current: GenericKubernetesResource[]
-      ) => GenericKubernetesResource[]
-    ) => {
-      const cache = get(kubernetesResourceAtom);
-      set(kubernetesResourceAtom, {
-        ...cache,
-        [key]: updateFn(cache[key] || []),
-      });
-    }
+  const resourceAtom = useMemo(
+    () =>
+      atom(
+        (get) => {
+          const cache = get(kubernetesResourceAtom);
+          return cache[key] || [];
+        },
+        (
+          get,
+          set,
+          updateFn: (
+            current: GenericKubernetesResource[]
+          ) => GenericKubernetesResource[]
+        ) => {
+          const cache = get(kubernetesResourceAtom);
+          set(kubernetesResourceAtom, {
+            ...cache,
+            [key]: updateFn(cache[key] || []),
+          });
+        }
+      ),
+    [key]
   );
   return resourceAtom;
 };
