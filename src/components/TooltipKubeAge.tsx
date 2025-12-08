@@ -14,29 +14,39 @@ export const TooltipKubeAge = ({
   creationTimestamp: string;
   spanProps?: React.HTMLAttributes<HTMLSpanElement>;
 }) => {
+  const dateObj = useMemo(() => {
+    if (!creationTimestamp) return null;
+    const d = new Date(creationTimestamp);
+    return isNaN(d.getTime()) ? null : d;
+  }, [creationTimestamp]);
+
   const age = useMemo(
-    () => formatKubeAge(creationTimestamp),
-    [creationTimestamp]
+    () => dateObj ? formatKubeAge(dateObj.toISOString()) : "-",
+    [dateObj]
   );
   const date = useMemo(
-    () => format(creationTimestamp, "eee, d MMM yyyy"),
-    [creationTimestamp]
+    () => dateObj ? format(dateObj, "eee, d MMM yyyy") : "-",
+    [dateObj]
   );
 
   const localTime = useMemo(
-    () => format(creationTimestamp, "h:mm a"),
-    [creationTimestamp]
+    () => dateObj ? format(dateObj, "h:mm a") : "",
+    [dateObj]
   );
 
   const localTimezone = useMemo(
-    () => format(creationTimestamp, "OOOO"),
-    [creationTimestamp]
+    () => dateObj ? format(dateObj, "OOOO") : "",
+    [dateObj]
   );
 
   const utcTime = useMemo(
-    () => format(creationTimestamp, "h:mm a", { in: tz("UTC") }),
-    [creationTimestamp]
+    () => dateObj ? format(dateObj, "h:mm a", { in: tz("UTC") }) : "",
+    [dateObj]
   );
+
+  if (!dateObj) {
+    return <span {...spanProps}>-</span>;
+  }
 
   return (
     <HoverCard.Root>

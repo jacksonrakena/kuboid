@@ -213,10 +213,37 @@ async fn stop_listen_task(
 ) -> Result<(), String> {
     let mut state = state.lock().await;
 
-    kill_task_internal(&mut state, task_id).ok_or("no such task".to_string())
+    // 1. Remove Bridge Task
+    if let Some(task_handle) = state.task_map.remove(&task_id) {
+         eprintln!("[{}] Stopping bridge task", task_id);
+         TokioJoinHandle::abort(&task_handle.handle);
+
+         // 2. Decrement Ref Count on Shared Watcher
+         let key = SubscriptionKey {
+             group: task_handle.metadata.group,
+             api_version: task_handle.metadata.api_version,
+             resource_plural: task_handle.metadata.resource_plural,
+             namespace: task_handle.metadata.namespace,
+             name: task_handle.metadata.name,
+         };
+
+         if let Some(shared) = state.watchers.get_mut(&key) {
+             shared.ref_count -= 1;
+             eprintln!("[{}] Decremented ref count for {:?} to {}", task_id, key, shared.ref_count);
+             if shared.ref_count == 0 {
+                 eprintln!("[{}] Stopping source task for {:?}", task_id, key);
+                 TokioJoinHandle::abort(&shared.source_task);
+                 state.watchers.remove(&key);
+             }
+         }
+         Ok(())
+    } else {
+        Err("no such task".to_string())
+    }
 }
 
 #[derive(Clone, Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
 struct TaskMetadata {
     id: i32,
     group: String,
@@ -224,6 +251,9 @@ struct TaskMetadata {
     resource_plural: String,
     name: Option<String>,
     namespace: Option<String>,
+    // We don't need to serialize the key itself to frontend if not needed,
+    // but we need it in the TaskHandle struct or accessible via these fields.
+    // Constructing SubscriptionKey from these fields is easy.
 }
 
 struct TaskHandle {
@@ -242,81 +272,209 @@ async fn start_listening(
     namespace: Option<String>,
     channel: Channel<ResourceListenEvent>
 ) -> Result<i32, String> {
-    let mut state = state.lock().await;
-
-    let ar = kube::discovery::ApiResource {
+    
+    // 1. Construct the key
+    let key = SubscriptionKey {
         group: group.clone(),
         api_version: api_version.clone(),
-        plural: resource_plural.clone(),
-        version: "".to_string(),
-        kind: "".to_string(),
-    };
-    let api: Api<DynamicObject> = if let Some(ns) = &namespace {
-        Api::namespaced_with(state.kube_client.clone(), ns, &ar)
-    } else {
-        Api::all_with(state.kube_client.clone(), &ar)
+        resource_plural: resource_plural.clone(),
+        namespace: namespace.clone(),
+        name: name.clone(),
     };
 
-    let mut wc = watcher::Config::default().streaming_lists();
+    let mut state = state.lock().await;
 
-    let name0 = name.clone();
-    let join_handle = tokio::task::spawn(async move {
-        match name0 {
-            Some(name) => {
-                let mut events = watch_object(api, &name).default_backoff().boxed();
-                loop {
-                    match events.try_next().await {
-                        // object updated, created, or found
-                        Ok(Some(Some(event))) => {
-                            let listen_event = ResourceListenEvent::Apply {
-                                resource: serde_json::to_value(event).unwrap(),
-                            };
-                            let _ = channel.send(listen_event);
-                        },
-                        // object deleted or not found
-                        Ok(Some(None)) => {
-                            let listen_event = ResourceListenEvent::SingleResourceNotFoundOrDeleted;
-                            let _ = channel.send(listen_event);
-                        },
-                        Ok(None) => {
-                            let _ = channel.send(ResourceListenEvent::Error {
-                                message: "none value given from watcher".to_string()
-                            });
-                        }
-                        Err(e) => {
-                            let _ = channel.send(ResourceListenEvent::Error {
-                                message: e.to_string()
-                            });
+    // 2. Check or Create Source Task
+    let is_new = !state.watchers.contains_key(&key);
+    
+    if is_new {
+        let (tx, _rx) = tokio::sync::broadcast::channel(100);
+        let cache = Arc::new(RwLock::new(HashMap::new()));
+
+        let ar = kube::discovery::ApiResource {
+            group: group.clone(),
+            api_version: api_version.clone(),
+            plural: resource_plural.clone(),
+            version: "".to_string(),
+            kind: "".to_string(),
+        };
+        let api: Api<DynamicObject> = if let Some(ns) = &namespace {
+            Api::namespaced_with(state.kube_client.clone(), ns, &ar)
+        } else {
+            Api::all_with(state.kube_client.clone(), &ar)
+        };
+        let mut wc = watcher::Config::default().streaming_lists();
+
+        let tx_clone = tx.clone();
+        let cache_clone = cache.clone();
+        let name_clone = name.clone();
+        
+        // Spawn Source Task
+        let source_handle = tokio::task::spawn(async move {
+             match name_clone {
+                Some(name) => {
+                    let mut events = watch_object(api, &name).default_backoff().boxed();
+                    loop {
+                        match events.try_next().await {
+                            Ok(Some(Some(event))) => {
+                                let listen_event = ResourceListenEvent::Apply {
+                                    resource: serde_json::to_value(&event).unwrap(), // Clone event?
+                                };
+                                let _ = tx_clone.send(listen_event);
+                                
+                                // Update Cache
+                                let uid = event.metadata.uid.clone().unwrap_or_default();
+                                if let Ok(mut c) = cache_clone.write() {
+                                    if let Ok(val) = serde_json::to_value(event) {
+                                         c.insert(uid, val);
+                                    }
+                                }
+                            },
+                             Ok(Some(None)) => {
+                                let listen_event = ResourceListenEvent::SingleResourceNotFoundOrDeleted;
+                                let _ = tx_clone.send(listen_event);
+                                // Clear cache? Or assume client handles it.
+                                // For single resource watch, simpler to not cache aggressively or clear all.
+                                if let Ok(mut c) = cache_clone.write() {
+                                    c.clear();
+                                }
+                            },
+                            Ok(None) => {
+                                let _ = tx_clone.send(ResourceListenEvent::Error {
+                                    message: "none value given from watcher".to_string()
+                                });
+                            }
+                            Err(e) => {
+                                let _ = tx_clone.send(ResourceListenEvent::Error {
+                                    message: e.to_string()
+                                });
+                            }
                         }
                     }
-                }
-            },
-            None => {
-                let mut events = watcher(api,wc).default_backoff().boxed();
-
-                loop {
-                    match events.try_next().await {
-                        Ok(Some(p)) => {
-                            let listen_event = ResourceListenEvent::from(p);
-                            let _ = channel.send(listen_event);
-                        }
-                        Ok(None) => {
-                            let _ = channel.send(ResourceListenEvent::Error {
-                                message: "none value given from watcher".to_string()
-                            });
-                        }
-                        Err(e) => {
-                            let _ = channel.send(ResourceListenEvent::Error {
-                                message: e.to_string()
-                            });
+                },
+                None => {
+                    let mut events = watcher(api, wc).default_backoff().boxed();
+                    loop {
+                        match events.try_next().await {
+                            Ok(Some(p)) => {
+                                let listen_event = ResourceListenEvent::from(p.clone());
+                                let _ = tx_clone.send(listen_event);
+                                
+                                // Maintain Cache
+                                if let Ok(mut c) = cache_clone.write() {
+                                    match p {
+                                        Event::Apply(obj) => {
+                                            if let Some(uid) = &obj.metadata.uid {
+                                                if let Ok(val) = serde_json::to_value(&obj) {
+                                                    c.insert(uid.clone(), val);
+                                                }
+                                            }
+                                        },
+                                        Event::Delete(obj) => {
+                                            if let Some(uid) = &obj.metadata.uid {
+                                                c.remove(uid);
+                                            }
+                                        },
+                                        Event::InitApply(obj) => {
+                                            if let Some(uid) = &obj.metadata.uid {
+                                                if let Ok(val) = serde_json::to_value(&obj) {
+                                                    c.insert(uid.clone(), val);
+                                                }
+                                            }
+                                        },
+                                        Event::Init => {
+                                            c.clear();
+                                        }
+                                        // InitDone nothing
+                                        _ => {}
+                                    }
+                                }
+                            }
+                            Ok(None) => {
+                                let _ = tx_clone.send(ResourceListenEvent::Error {
+                                    message: "none value given from watcher".to_string()
+                                });
+                            }
+                            Err(e) => {
+                                let _ = tx_clone.send(ResourceListenEvent::Error {
+                                    message: e.to_string()
+                                });
+                            }
                         }
                     }
                 }
             }
+        });
+
+        eprintln!("[{}] Started NEW source task for key {:?}", subscription_id, key);
+        
+        state.watchers.insert(key.clone(), SharedWatcher {
+            tx,
+            cache,
+            source_task: source_handle,
+            ref_count: 0
+        });
+    } else {
+        eprintln!("[{}] Reusing existing source task for key {:?}", subscription_id, key);
+    }
+
+    // 3. Increment Ref Count & attach
+    let shared = state.watchers.get_mut(&key).unwrap();
+    shared.ref_count += 1;
+    let mut rx = shared.tx.subscribe();
+    let cache_access = shared.cache.clone();
+
+    // 4. Spawn Bridge Task
+    let bridge_handle = tokio::task::spawn(async move {
+        // Only perform artificial replay if we are joining an EXISTING stream.
+        // If it's NEW, the source task will naturally emit Init/InitDone to the channel.
+        if !is_new {
+            // A. Send Init
+            let _ = channel.send(ResourceListenEvent::Init);
+            
+            // B. Replay Cache
+            // Scope the lock
+            {
+                if let Ok(cache) = cache_access.read() {
+                    for (_, val) in cache.iter() {
+                        let _ = channel.send(ResourceListenEvent::InitApply {
+                            resource: val.clone()
+                        });
+                    }
+                }
+            } // lock released
+
+            // C. Send InitDone
+            let _ = channel.send(ResourceListenEvent::InitDone);
+        }
+
+        // D. Loop Broadcast
+        loop {
+            match rx.recv().await {
+                Ok(msg) => {
+                    // Send to Tauri channel
+                    if let Err(_) = channel.send(msg) {
+                        // Channel closed by frontend
+                        break;
+                    }
+                },
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                     eprintln!("Bridge task lagged by {} messages", n);
+                     let _ = channel.send(ResourceListenEvent::Init);
+                     // If we lagged, we might need to resync.
+                     // For now, sending Init might trigger a refresh if the frontend handles it,
+                     // but frontend Init logic is "Stale-While-Revalidate".
+                     // The source task continues sending Apply.
+                     // This is a complex edge case for deduplication.
+                },
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                    break;
+                }
+            }
         }
     });
-    eprintln!("[{}] Started task with handle {} ({})", subscription_id, join_handle.id(), DynamicObject::url_path(&ar, None));
 
+    // 5. Register Bridge Task in task_map
     let metadata = TaskMetadata {
         id: subscription_id,
         group,
@@ -325,11 +483,11 @@ async fn start_listening(
         name,
         namespace,
     };
-
     state.task_map.insert(subscription_id, TaskHandle {
-        handle: join_handle,
+        handle: bridge_handle,
         metadata
     });
+
     Ok(subscription_id)
 }
 
@@ -370,9 +528,19 @@ impl XApiGroup {
 
 
 #[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WatcherDebugInfo {
+    key: String, // Simplified string representation
+    ref_count: usize,
+    cache_size: usize,
+}
+
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 struct DebugInfo {
     open_tasks: i32,
-    tasks: Vec<TaskMetadata>
+    tasks: Vec<TaskMetadata>,
+    watchers: Vec<WatcherDebugInfo>,
 }
 
 #[tauri::command]
@@ -380,10 +548,24 @@ async fn debug(state: CommandGlobalState<'_>) -> Result<DebugInfo, ()> {
     let state = state.lock().await;
 
     let tasks: Vec<TaskMetadata> = state.task_map.values().map(|t| t.metadata.clone()).collect();
+    
+    let watchers: Vec<WatcherDebugInfo> = state.watchers.iter().map(|(k, v)| {
+        let cache_len = if let Ok(c) = v.cache.read() {
+            c.len()
+        } else {
+            0
+        };
+        WatcherDebugInfo {
+            key: format!("{}/{}/{}", k.group, k.api_version, k.resource_plural),
+            ref_count: v.ref_count,
+            cache_size: cache_len
+        }
+    }).collect();
 
     Ok(DebugInfo {
         open_tasks: state.task_map.len() as i32,
-        tasks
+        tasks,
+        watchers
     })
 }
 
@@ -433,11 +615,38 @@ async fn exec_raw(state: CommandGlobalState<'_>, path: String) -> Result<String,
     Ok(data)
 }
 
+use std::sync::{Arc, RwLock};
+
+#[derive(Hash, Eq, PartialEq, Clone, Debug)]
+struct SubscriptionKey {
+    group: String,
+    api_version: String,
+    resource_plural: String,
+    namespace: Option<String>,
+    name: Option<String>,
+}
+
+struct SharedWatcher {
+    // To send control signals or just purely broadcast events
+    tx: tokio::sync::broadcast::Sender<ResourceListenEvent>,
+
+    // Latest state for "Replay" to new subscribers
+    // stored as JSON values for simplicity since we broadcast JSON
+    cache: Arc<RwLock<HashMap<String, serde_json::Value>>>,
+
+    // Handle to the Source Task (to abort it when ref_count=0)
+    source_task: TokioJoinHandle<()>,
+
+    // Number of active Bridge Tasks using this source
+    ref_count: usize,
+}
+
 struct GlobalState {
     kubeconfig: Option<Kubeconfig>,
     kube_client: Client,
     kube_discovery: Option<Discovery>,
     task_map: HashMap<i32, TaskHandle>,
+    watchers: HashMap<SubscriptionKey, SharedWatcher>,
 }
 
 type CommandGlobalState<'a> = State<'a, Mutex<GlobalState>>;
@@ -453,6 +662,7 @@ pub fn run() {
                     kube_client: client.clone(),
                     kube_discovery: Some(Discovery::new(client)),
                     task_map: HashMap::new(),
+                    watchers: HashMap::new(),
                     kubeconfig: None
                 }));
             });
