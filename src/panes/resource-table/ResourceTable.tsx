@@ -1,4 +1,4 @@
-import { Box, Flex, Table, Text, TextField, Tooltip } from "@radix-ui/themes";
+import { Box, Button, DropdownMenu, Flex, Table, Text, TextField, Tooltip } from "@radix-ui/themes";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   MantineReactTable,
@@ -6,7 +6,7 @@ import {
   type MRT_ColumnDef,
 } from "mantine-react-table";
 import { discoverRows } from "./layouts/autodiscovery";
-import { MagnifyingGlassIcon } from "@radix-ui/react-icons";
+import { MagnifyingGlassIcon, MixIcon } from "@radix-ui/react-icons";
 import { useResourceList } from "../../util/kube/subscriptions";
 import { makeKubePath, useKubePathParams } from "../../util/kube/routes";
 import { useKeyPress } from "../../util/keybinds";
@@ -31,6 +31,8 @@ export const ResourceTableInner = ({
   kubeParams: ReturnType<typeof useKubePathParams>;
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedNamespaces, setSelectedNamespaces] = useState<string[]>([]);
+
   const ref = useRef<HTMLInputElement | null>(null);
   useKeyPress("/", () => {
     ref.current?.focus();
@@ -43,8 +45,27 @@ export const ResourceTableInner = ({
     },
     { noEffectWhileInTextInput: false }
   );
-  const { resources, lastEventTime } = useResourceList<any>(kubeParams);
+
+  // Merge namespaces into params for backend subscription
+  const effectiveParams = useMemo(() => ({
+    ...kubeParams,
+    namespaces: selectedNamespaces
+  }), [kubeParams, selectedNamespaces]);
+
+  const { resources, lastEventTime } = useResourceList<any>(effectiveParams);
   //const resources = useCachedResourceList(kubeParams) ?? [];
+
+  // Client-side search implementation
+  const filteredResources = useMemo(() => {
+    if (!searchTerm) return resources;
+    const lowerTerm = searchTerm.toLowerCase();
+    return resources.filter(r => {
+      // Simple search on name and namespace
+      const name = r.metadata?.name?.toLowerCase() ?? "";
+      const ns = r.metadata?.namespace?.toLowerCase() ?? "";
+      return name.includes(lowerTerm) || ns.includes(lowerTerm);
+    });
+  }, [resources, searchTerm]);
 
   const [asyncColumns, setAsyncColumns] = useState<MRT_ColumnDef<any>[] | null>(
     null
@@ -55,12 +76,12 @@ export const ResourceTableInner = ({
   }, [kubeParams]);
   useEffect(() => {
     (async () => {
-      if (resources.length > 0 && asyncColumns === null) {
+      if (filteredResources.length > 0 && asyncColumns === null) {
         const discovered = await discoverRows(kubeParams);
         setAsyncColumns(discovered);
       }
     })();
-  }, [resources, kubeParams]);
+  }, [filteredResources, kubeParams]);
   const PREPEND_BLACKLIST = ["/api/v1/events"];
   const APPEND_BLACKLIST = ["/api/v1/events"];
   const rows = useMemo(
@@ -78,7 +99,7 @@ export const ResourceTableInner = ({
 
   const table = useMantineReactTable({
     columns: rows,
-    data: resources,
+    data: filteredResources,
     enableDensityToggle: false,
     initialState: {
       density: "xs",
@@ -133,7 +154,9 @@ export const ResourceTableInner = ({
         setSearchTerm={setSearchTerm}
         lastEventTime={lastEventTime}
         kubeParams={kubeParams}
-        resources={resources}
+        resources={filteredResources}
+        selectedNamespaces={selectedNamespaces}
+        setSelectedNamespaces={setSelectedNamespaces}
       />
       <Box flexGrow={"1"} style={{ minHeight: 0 }}>
         <MantineReactTable table={table} />
@@ -148,12 +171,16 @@ export const ResourceToolbar = ({
   lastEventTime,
   kubeParams,
   resources,
+  selectedNamespaces,
+  setSelectedNamespaces
 }: {
   searchTerm: string;
   setSearchTerm: React.Dispatch<React.SetStateAction<string>>;
   lastEventTime: Date | null;
   kubeParams: ReturnType<typeof useKubePathParams>;
   resources: any[];
+  selectedNamespaces: string[];
+  setSelectedNamespaces: React.Dispatch<React.SetStateAction<string[]>>;
 }) => {
   return (
     <Flex
@@ -175,6 +202,11 @@ export const ResourceToolbar = ({
           <MagnifyingGlassIcon height="16" width="16" />
         </TextField.Slot>
       </TextField.Root>
+
+      {kubeParams.resource_plural !== "namespaces" && (
+        <NamespaceSelector selected={selectedNamespaces} onChange={setSelectedNamespaces} />
+      )}
+
       <Box>
         <Tooltip
           content={`Last event: ${lastEventTime?.toString() ?? "unknown"}`}
@@ -196,6 +228,67 @@ export const ResourceToolbar = ({
     </Flex>
   );
 };
+
+const NamespaceSelector = ({ selected, onChange }: { selected: string[], onChange: (ns: string[]) => void }) => {
+  // Fetch namespaces list
+  const { resources: namespaces } = useResourceList<any>({
+    group: "",
+    api_version: "v1",
+    resource_plural: "namespaces",
+  });
+
+  // Sort namespaces: default first, then alphabetical
+  const sortedNamespaces = useMemo(() => {
+    return [...namespaces].sort((a, b) => {
+      const nameA = a.metadata.name;
+      const nameB = b.metadata.name;
+      if (nameA === 'default') return -1;
+      if (nameB === 'default') return 1;
+      return nameA.localeCompare(nameB);
+    });
+  }, [namespaces]);
+
+  const toggleNamespace = (ns: string) => {
+    if (selected.includes(ns)) {
+      onChange(selected.filter(s => s !== ns));
+    } else {
+      onChange([...selected, ns]);
+    }
+  };
+
+  const clearSelection = () => onChange([]);
+
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger>
+        <Button variant="soft" color="gray" size="1">
+          <MixIcon />
+          {selected.length === 0 ? "All Namespaces" : `${selected.length} Selected`}
+        </Button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Content>
+        <DropdownMenu.Item onClick={clearSelection}>
+          All Namespaces
+        </DropdownMenu.Item>
+        <DropdownMenu.Separator />
+        <Box style={{ maxHeight: '300px', overflowY: 'auto' }}>
+          {sortedNamespaces.map(ns => {
+            const name = ns.metadata.name;
+            return (
+              <DropdownMenu.CheckboxItem
+                key={name}
+                checked={selected.includes(name)}
+                onCheckedChange={() => toggleNamespace(name)}
+              >
+                {name}
+              </DropdownMenu.CheckboxItem>
+            )
+          })}
+        </Box>
+      </DropdownMenu.Content>
+    </DropdownMenu.Root>
+  )
+}
 
 /*
       {/* <ContextMenu.Root>

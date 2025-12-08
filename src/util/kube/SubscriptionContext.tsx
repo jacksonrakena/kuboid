@@ -182,6 +182,7 @@ export const ResourceSubscriptionProvider = ({
                     resourcePlural: resource.resource_plural,
                     channel,
                     subscriptionId: taskId,
+                    namespaces: resource.namespaces,
                     // name/namespace handled by spread? check args.
                     // lib.rs: group, api_version, resource_plural, subscription_id, name?, namespace?, channel
                     // resource components has: group, api_version, resource_plural, namespace?, name?

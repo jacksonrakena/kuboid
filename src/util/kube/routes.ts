@@ -19,6 +19,9 @@ export interface KubeUrlComponents {
 
   // plural form of resource, i.e. "pods" or "mutatingwebhookconfigurations"
   resource_plural: string;
+
+  // Optional list of namespaces to filter by (for multi-namespace watch)
+  namespaces?: string[];
 } /**
  * returns a kube api path for the given components
  *
@@ -30,7 +33,18 @@ export interface KubeUrlComponents {
  */
 
 export const makeKubePath = (components: KubeUrlComponents) => {
-  return `/${components.group ? "apis" : "api"}/${components.api_version}/${components.namespace ? `namespaces/${components.namespace}/` : ""}${components.resource_plural}${components.name ? `/${components.name}` : ""}`;
+  let path = `/${components.group ? "apis" : "api"}/${components.api_version}/${components.namespace ? `namespaces/${components.namespace}/` : ""}${components.resource_plural}${components.name ? `/${components.name}` : ""}`;
+  if (components.namespaces && components.namespaces.length > 0) {
+    // Append sorted namespaces query param or suffix to differentiate the key.
+    // Since this function is used for CACHE KEYS mostly (in SubscriptionContext), 
+    // we need it to be unique per namespace combination.
+    // It is NOT used for actual HTTP requests in the new subscription model (sockets), 
+    // but the backend `start_listening` expects specific args, not a URL.
+    // However, `useResourceSubscription` uses this key to dedup.
+    const nsSuffix = [...components.namespaces].sort().join(",");
+    path += `?namespaces=${nsSuffix}`;
+  }
+  return path;
 };
 export type KubeCoreGroupPathParams = {
   api_version: string;

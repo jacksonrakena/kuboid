@@ -225,6 +225,7 @@ async fn stop_listen_task(
              resource_plural: task_handle.metadata.resource_plural,
              namespace: task_handle.metadata.namespace,
              name: task_handle.metadata.name,
+             namespaces: task_handle.metadata.namespaces,
          };
 
          if let Some(shared) = state.watchers.get_mut(&key) {
@@ -251,9 +252,7 @@ struct TaskMetadata {
     resource_plural: String,
     name: Option<String>,
     namespace: Option<String>,
-    // We don't need to serialize the key itself to frontend if not needed,
-    // but we need it in the TaskHandle struct or accessible via these fields.
-    // Constructing SubscriptionKey from these fields is easy.
+    namespaces: Option<Vec<String>>,
 }
 
 struct TaskHandle {
@@ -270,9 +269,16 @@ async fn start_listening(
     subscription_id: i32,
     name: Option<String>,
     namespace: Option<String>,
+    namespaces: Option<Vec<String>>,
     channel: Channel<ResourceListenEvent>
 ) -> Result<i32, String> {
     
+    // Sort namespaces if present to ensure consistent key
+    let mut sorted_namespaces = namespaces.clone();
+    if let Some(ref mut ns_list) = sorted_namespaces {
+        ns_list.sort();
+    }
+
     // 1. Construct the key
     let key = SubscriptionKey {
         group: group.clone(),
@@ -280,6 +286,7 @@ async fn start_listening(
         resource_plural: resource_plural.clone(),
         namespace: namespace.clone(),
         name: name.clone(),
+        namespaces: sorted_namespaces.clone(),
     };
 
     let mut state = state.lock().await;
@@ -298,11 +305,25 @@ async fn start_listening(
             version: "".to_string(),
             kind: "".to_string(),
         };
-        let api: Api<DynamicObject> = if let Some(ns) = &namespace {
-            Api::namespaced_with(state.kube_client.clone(), ns, &ar)
+
+        // Determine which APIs to watch
+        let apis: Vec<Api<DynamicObject>> = if let Some(ns_list) = &sorted_namespaces {
+            // Watch multiple specific namespaces
+            if ns_list.is_empty() {
+                vec![Api::all_with(state.kube_client.clone(), &ar)]
+            } else {
+                ns_list.iter()
+                    .map(|ns| Api::namespaced_with(state.kube_client.clone(), ns, &ar))
+                    .collect()
+            }
+        } else if let Some(ns) = &namespace {
+            // Watch single namespace
+            vec![Api::namespaced_with(state.kube_client.clone(), ns, &ar)]
         } else {
-            Api::all_with(state.kube_client.clone(), &ar)
+            // Watch all
+            vec![Api::all_with(state.kube_client.clone(), &ar)]
         };
+
         let mut wc = watcher::Config::default().streaming_lists();
 
         let tx_clone = tx.clone();
@@ -313,50 +334,58 @@ async fn start_listening(
         let source_handle = tokio::task::spawn(async move {
              match name_clone {
                 Some(name) => {
-                    let mut events = watch_object(api, &name).default_backoff().boxed();
-                    loop {
-                        match events.try_next().await {
-                            Ok(Some(Some(event))) => {
-                                let listen_event = ResourceListenEvent::Apply {
-                                    resource: serde_json::to_value(&event).unwrap(), // Clone event?
-                                };
-                                let _ = tx_clone.send(listen_event);
-                                
-                                // Update Cache
-                                let uid = event.metadata.uid.clone().unwrap_or_default();
-                                if let Ok(mut c) = cache_clone.write() {
-                                    if let Ok(val) = serde_json::to_value(event) {
-                                         c.insert(uid, val);
+                    // Single resource watch (always single API - name implies specific namespace usually or cluster scoped)
+                    if let Some(first_api) = apis.first() {
+                        let mut events = watch_object(first_api.clone(), &name).default_backoff().boxed();
+                        loop {
+                            match events.try_next().await {
+                                Ok(Some(Some(event))) => {
+                                    let listen_event = ResourceListenEvent::Apply {
+                                        resource: serde_json::to_value(&event).unwrap(), // Clone event?
+                                    };
+                                    let _ = tx_clone.send(listen_event);
+                                    
+                                    // Update Cache
+                                    let uid = event.metadata.uid.clone().unwrap_or_default();
+                                    if let Ok(mut c) = cache_clone.write() {
+                                        if let Ok(val) = serde_json::to_value(event) {
+                                             c.insert(uid, val);
+                                        }
                                     }
+                                },
+                                 Ok(Some(None)) => {
+                                    let listen_event = ResourceListenEvent::SingleResourceNotFoundOrDeleted;
+                                    let _ = tx_clone.send(listen_event);
+                                    if let Ok(mut c) = cache_clone.write() {
+                                        c.clear();
+                                    }
+                                },
+                                Ok(None) => {
+                                    let _ = tx_clone.send(ResourceListenEvent::Error {
+                                        message: "none value given from watcher".to_string()
+                                    });
                                 }
-                            },
-                             Ok(Some(None)) => {
-                                let listen_event = ResourceListenEvent::SingleResourceNotFoundOrDeleted;
-                                let _ = tx_clone.send(listen_event);
-                                // Clear cache? Or assume client handles it.
-                                // For single resource watch, simpler to not cache aggressively or clear all.
-                                if let Ok(mut c) = cache_clone.write() {
-                                    c.clear();
+                                Err(e) => {
+                                    let _ = tx_clone.send(ResourceListenEvent::Error {
+                                        message: e.to_string()
+                                    });
                                 }
-                            },
-                            Ok(None) => {
-                                let _ = tx_clone.send(ResourceListenEvent::Error {
-                                    message: "none value given from watcher".to_string()
-                                });
-                            }
-                            Err(e) => {
-                                let _ = tx_clone.send(ResourceListenEvent::Error {
-                                    message: e.to_string()
-                                });
                             }
                         }
                     }
                 },
                 None => {
-                    let mut events = watcher(api, wc).default_backoff().boxed();
+                    // List/Watch
+                    // Merge streams if multiple APIs
+                    let streams = apis.into_iter().map(|api| {
+                         watcher(api, wc.clone()).default_backoff().boxed()
+                    });
+                    
+                    let mut events = futures_util::stream::select_all(streams);
+
                     loop {
-                        match events.try_next().await {
-                            Ok(Some(p)) => {
+                        match events.next().await {
+                            Some(Ok(p)) => {
                                 let listen_event = ResourceListenEvent::from(p.clone());
                                 let _ = tx_clone.send(listen_event);
                                 
@@ -383,22 +412,25 @@ async fn start_listening(
                                             }
                                         },
                                         Event::Init => {
-                                            c.clear();
+                                           // Don't clear for multi-watcher due to race conditions
+                                           // c.clear();
                                         }
                                         // InitDone nothing
                                         _ => {}
                                     }
                                 }
                             }
-                            Ok(None) => {
-                                let _ = tx_clone.send(ResourceListenEvent::Error {
-                                    message: "none value given from watcher".to_string()
-                                });
-                            }
-                            Err(e) => {
+                            Some(Err(e)) => {
                                 let _ = tx_clone.send(ResourceListenEvent::Error {
                                     message: e.to_string()
                                 });
+                            },
+                            None => {
+                                // All streams finished?
+                                let _ = tx_clone.send(ResourceListenEvent::Error {
+                                    message: "all watcher streams ended".to_string()
+                                });
+                                break;
                             }
                         }
                     }
@@ -461,11 +493,6 @@ async fn start_listening(
                 Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
                      eprintln!("Bridge task lagged by {} messages", n);
                      let _ = channel.send(ResourceListenEvent::Init);
-                     // If we lagged, we might need to resync.
-                     // For now, sending Init might trigger a refresh if the frontend handles it,
-                     // but frontend Init logic is "Stale-While-Revalidate".
-                     // The source task continues sending Apply.
-                     // This is a complex edge case for deduplication.
                 },
                 Err(tokio::sync::broadcast::error::RecvError::Closed) => {
                     break;
@@ -482,6 +509,7 @@ async fn start_listening(
         resource_plural,
         name,
         namespace,
+        namespaces: sorted_namespaces,
     };
     state.task_map.insert(subscription_id, TaskHandle {
         handle: bridge_handle,
@@ -624,6 +652,7 @@ struct SubscriptionKey {
     resource_plural: String,
     namespace: Option<String>,
     name: Option<String>,
+    namespaces: Option<Vec<String>>,
 }
 
 struct SharedWatcher {
