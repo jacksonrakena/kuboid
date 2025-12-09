@@ -9,6 +9,10 @@ export const kubernetesResourceAtom = atom<{
   [key: string]: GenericKubernetesResource[];
 }>({});
 
+export const kubernetesLoadingAtom = atom<{
+  [key: string]: boolean;
+}>({});
+
 export const useKubernetesResourceCache = (key: string) => {
   const resourceAtom = useMemo(
     () =>

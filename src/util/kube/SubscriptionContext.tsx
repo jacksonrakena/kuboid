@@ -6,7 +6,7 @@ import {
 } from "react";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { useSetAtom } from "jotai";
-import { kubernetesResourceAtom } from "./cache";
+import { kubernetesResourceAtom, kubernetesLoadingAtom } from "./cache";
 import { makeKubePath, KubeUrlComponents } from "./routes";
 import { GenericKubernetesResource } from "./types";
 
@@ -47,6 +47,7 @@ export const ResourceSubscriptionProvider = ({
     children: React.ReactNode;
 }) => {
     const setAllResources = useSetAtom(kubernetesResourceAtom);
+    const setLoading = useSetAtom(kubernetesLoadingAtom);
 
     // Map key is result of makeKubePath(resource)
     const subscriptions = useRef<Map<string, ActiveSubscription>>(new Map());
@@ -63,6 +64,7 @@ export const ResourceSubscriptionProvider = ({
                 case "init":
                     sub.initializing = true;
                     sub.seenUids.clear();
+                    setLoading((prev) => ({ ...prev, [key]: true }));
                     // Do NOT clear the cache here. We want to keep effective cache until InitDone.
                     break;
 
@@ -90,6 +92,7 @@ export const ResourceSubscriptionProvider = ({
 
                 case "initDone":
                     sub.initializing = false;
+                    setLoading((prev) => ({ ...prev, [key]: false }));
                     // Prune resources that were NOT seen during init
                     setAllResources((prevCache) => {
                         const currentList = prevCache[key] || [];
@@ -169,6 +172,7 @@ export const ResourceSubscriptionProvider = ({
                     initializing: true,
                 };
                 subscriptions.current.set(key, newSub);
+                setLoading((prev) => ({ ...prev, [key]: true }));
                 sub = newSub;
 
                 channel.onmessage = (msg) => {
@@ -190,6 +194,7 @@ export const ResourceSubscriptionProvider = ({
                     // `KubeUrlComponents` has exactly these fields.
                 }).catch((err) => {
                     console.error("Failed to start listening", err);
+                    setLoading((prev) => ({ ...prev, [key]: false }));
                     // Cleanup?
                     subscriptions.current.delete(key);
                 });

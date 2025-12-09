@@ -1,4 +1,4 @@
-import { Box, Button, DropdownMenu, Flex, Table, Text, TextField, Tooltip } from "@radix-ui/themes";
+import { Box, Button, DropdownMenu, Flex, Spinner, Text, TextField, Tooltip } from "@radix-ui/themes";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   MantineReactTable,
@@ -11,7 +11,6 @@ import { useResourceList } from "../../util/kube/subscriptions";
 import { makeKubePath, useKubePathParams } from "../../util/kube/routes";
 import { useKeyPress } from "../../util/keybinds";
 import { Builtins } from "./layouts/builtins";
-import { useCachedResource, useCachedResourceList } from "../../util/kube/cache";
 // import {
 //   AllCommunityModule,
 //   ModuleRegistry,
@@ -52,8 +51,7 @@ export const ResourceTableInner = ({
     namespaces: selectedNamespaces
   }), [kubeParams, selectedNamespaces]);
 
-  const { resources, lastEventTime } = useResourceList<any>(effectiveParams);
-  //const resources = useCachedResourceList(kubeParams) ?? [];
+  const { resources, lastEventTime, isLoading } = useResourceList<any>(effectiveParams);
 
   // Client-side search implementation
   const filteredResources = useMemo(() => {
@@ -157,9 +155,16 @@ export const ResourceTableInner = ({
         resources={filteredResources}
         selectedNamespaces={selectedNamespaces}
         setSelectedNamespaces={setSelectedNamespaces}
+        isLoading={isLoading}
       />
       <Box flexGrow={"1"} style={{ minHeight: 0 }}>
-        <MantineReactTable table={table} />
+        {(isLoading && resources.length === 0) ? (
+          <Flex align="center" justify="center" style={{ height: "100%" }}>
+            <Spinner size="3" />
+          </Flex>
+        ) : (
+          <MantineReactTable table={table} />
+        )}
       </Box>
     </Flex>
   );
@@ -172,7 +177,8 @@ export const ResourceToolbar = ({
   kubeParams,
   resources,
   selectedNamespaces,
-  setSelectedNamespaces
+  setSelectedNamespaces,
+  isLoading
 }: {
   searchTerm: string;
   setSearchTerm: React.Dispatch<React.SetStateAction<string>>;
@@ -181,6 +187,7 @@ export const ResourceToolbar = ({
   resources: any[];
   selectedNamespaces: string[];
   setSelectedNamespaces: React.Dispatch<React.SetStateAction<string[]>>;
+  isLoading: boolean;
 }) => {
   return (
     <Flex
@@ -211,18 +218,28 @@ export const ResourceToolbar = ({
         <Tooltip
           content={`Last event: ${lastEventTime?.toString() ?? "unknown"}`}
         >
-          <Text
-            color="gray"
-            size={"2"}
-            unselectable="on"
-            data-tauri-drag-region
-            style={{
-              WebkitUserSelect: "none",
-              userSelect: "none",
-            }}
-          >
-            {resources.length} {kubeParams.resource_plural}
-          </Text>
+          <Flex align="center" gap="2" style={{ cursor: "default" }}>
+            <Box
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                backgroundColor: isLoading ? "var(--yellow-10)" : "var(--green-10)",
+              }}
+            />
+            <Text
+              color="gray"
+              size={"2"}
+              unselectable="on"
+              data-tauri-drag-region
+              style={{
+                WebkitUserSelect: "none",
+                userSelect: "none",
+              }}
+            >
+              {resources.length} {kubeParams.resource_plural}
+            </Text>
+          </Flex>
         </Tooltip>
       </Box>
     </Flex>

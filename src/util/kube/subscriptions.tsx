@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import { useAtomValue } from "jotai";
 import { makeKubePath, type KubeUrlComponents } from "./routes";
-import { useCachedResourceList } from "./cache";
+import { useCachedResourceList, kubernetesLoadingAtom } from "./cache";
 import { GenericKubernetesResource } from "./types";
 import { useSubscriptionContext } from "./SubscriptionContext";
 
@@ -31,6 +32,7 @@ export const useResourceSubscription = (
 export type ResourceListState<T extends GenericKubernetesResource> = {
   resources: T[];
   lastEventTime: Date | null;
+  isLoading: boolean;
 };
 
 export const useResourceList = <T extends GenericKubernetesResource>(
@@ -52,5 +54,9 @@ export const useResourceList = <T extends GenericKubernetesResource>(
     setLastTime(new Date());
   }, [resources]);
 
-  return { resources, lastEventTime: lastTime };
+  const loadingMap = useAtomValue(kubernetesLoadingAtom);
+  const key = makeKubePath(resourceType);
+  const isLoading = loadingMap[key] ?? false;
+
+  return { resources, lastEventTime: lastTime, isLoading };
 };
