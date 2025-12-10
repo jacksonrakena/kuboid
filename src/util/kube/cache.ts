@@ -3,42 +3,20 @@ import { makeKubePath } from "./routes";
 import { KubeUrlComponents } from "./routes";
 import { useResourceSubscription } from "./subscriptions";
 import { GenericKubernetesResource } from "./types";
-import { useMemo } from "react";
+
+export interface ResourceCacheEntry {
+  resources: GenericKubernetesResource[];
+  isLoading: boolean;
+}
 
 export const kubernetesResourceAtom = atom<{
-  [key: string]: GenericKubernetesResource[];
+  [key: string]: ResourceCacheEntry;
 }>({});
 
-export const kubernetesLoadingAtom = atom<{
-  [key: string]: boolean;
-}>({});
+// removed kubernetesLoadingAtom
 
-export const useKubernetesResourceCache = (key: string) => {
-  const resourceAtom = useMemo(
-    () =>
-      atom(
-        (get) => {
-          const cache = get(kubernetesResourceAtom);
-          return cache[key] || [];
-        },
-        (
-          get,
-          set,
-          updateFn: (
-            current: GenericKubernetesResource[]
-          ) => GenericKubernetesResource[]
-        ) => {
-          const cache = get(kubernetesResourceAtom);
-          set(kubernetesResourceAtom, {
-            ...cache,
-            [key]: updateFn(cache[key] || []),
-          });
-        }
-      ),
-    [key]
-  );
-  return resourceAtom;
-};
+// removed useKubernetesResourceCache
+
 export const useCachedResource = (kubePathComponents: KubeUrlComponents) => {
   const cachedResources = useAtomValue(kubernetesResourceAtom);
   const resourceType = {
@@ -46,8 +24,8 @@ export const useCachedResource = (kubePathComponents: KubeUrlComponents) => {
     name: "",
     namespace: "",
   };
-  const resourcesOfType = cachedResources[makeKubePath(resourceType)];
-  const resource = resourcesOfType?.find(
+  const entry = cachedResources[makeKubePath(resourceType)];
+  const resource = entry?.resources.find(
     (e) =>
       e.metadata.name === kubePathComponents.name &&
       (kubePathComponents.namespace
@@ -64,8 +42,8 @@ export const useCachedResourceList = (kubePathComponents: KubeUrlComponents) => 
     name: "",
     namespace: "",
   };
-  const resourcesOfType = cachedResources[makeKubePath(resourceType)];
-  return resourcesOfType;
+  const entry = cachedResources[makeKubePath(resourceType)];
+  return entry || { resources: [], isLoading: false };
 }
 
 export const useCachedResourceAndStartWatch = (

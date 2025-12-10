@@ -284,9 +284,13 @@ const NamespaceSelector = ({ selected, onChange }: { selected: string[], onChang
         </Button>
       </DropdownMenu.Trigger>
       <DropdownMenu.Content>
-        <DropdownMenu.Item onClick={clearSelection}>
+        <DropdownMenu.CheckboxItem
+          checked={selected.length === 0}
+          onCheckedChange={clearSelection}
+          onSelect={(e) => e.preventDefault()}
+        >
           All Namespaces
-        </DropdownMenu.Item>
+        </DropdownMenu.CheckboxItem>
         <DropdownMenu.Separator />
         <Box style={{ maxHeight: '300px', overflowY: 'auto' }}>
           {sortedNamespaces.map(ns => {
@@ -296,6 +300,7 @@ const NamespaceSelector = ({ selected, onChange }: { selected: string[], onChang
                 key={name}
                 checked={selected.includes(name)}
                 onCheckedChange={() => toggleNamespace(name)}
+                onSelect={(e) => e.preventDefault()}
               >
                 {name}
               </DropdownMenu.CheckboxItem>

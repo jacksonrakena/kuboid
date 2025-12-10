@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
-import { useAtomValue } from "jotai";
+import { useEffect, useMemo } from "react";
 import { makeKubePath, type KubeUrlComponents } from "./routes";
-import { useCachedResourceList, kubernetesLoadingAtom } from "./cache";
+import { useCachedResourceList } from "./cache";
 import { GenericKubernetesResource } from "./types";
 import { useSubscriptionContext } from "./SubscriptionContext";
 
@@ -42,21 +41,13 @@ export const useResourceList = <T extends GenericKubernetesResource>(
   useResourceSubscription(resourceType);
 
   // Read from global cache
-  const cached = useCachedResourceList(resourceType) as T[] | undefined;
+  const { resources: cachedResources, isLoading } = useCachedResourceList(resourceType);
 
   // Return stable empty array if undefined
-  const resources = useMemo(() => cached || [], [cached]);
+  const resources = useMemo(() => (cachedResources as T[]) || [], [cachedResources]);
 
-  const [lastTime, setLastTime] = useState<Date | null>(null);
+  // Update lastTime when resources change, using useMemo to avoid extra render cycle
+  const lastEventTime = useMemo(() => new Date(), [resources]);
 
-  // update lastTime when resources change
-  useEffect(() => {
-    setLastTime(new Date());
-  }, [resources]);
-
-  const loadingMap = useAtomValue(kubernetesLoadingAtom);
-  const key = makeKubePath(resourceType);
-  const isLoading = loadingMap[key] ?? false;
-
-  return { resources, lastEventTime: lastTime, isLoading };
+  return { resources, lastEventTime, isLoading };
 };

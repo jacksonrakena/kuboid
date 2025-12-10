@@ -6,9 +6,29 @@ import {
 } from "react";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { useSetAtom } from "jotai";
-import { kubernetesResourceAtom, kubernetesLoadingAtom } from "./cache";
+import { kubernetesResourceAtom } from "./cache";
 import { makeKubePath, KubeUrlComponents } from "./routes";
 import { GenericKubernetesResource } from "./types";
+import { ResourceCacheEntry } from "./cache";
+
+const updateResourceInList = (list: GenericKubernetesResource[], newItem: GenericKubernetesResource): GenericKubernetesResource[] => {
+    const index = list.findIndex(r => r.metadata.uid === newItem.metadata.uid);
+    if (index !== -1) {
+        const newList = [...list];
+        newList[index] = newItem;
+        return newList;
+    }
+    return [...list, newItem];
+};
+
+const removeResourceFromList = (list: GenericKubernetesResource[], item: GenericKubernetesResource): GenericKubernetesResource[] => {
+    return list.filter(r => r.metadata.uid !== item.metadata.uid);
+};
+
+const getEntry = (map: { [key: string]: ResourceCacheEntry }, key: string): ResourceCacheEntry => {
+    return map[key] || { resources: [], isLoading: false };
+}
+
 
 type InternalSubscriptionEvent<T> =
     | {
@@ -47,7 +67,6 @@ export const ResourceSubscriptionProvider = ({
     children: React.ReactNode;
 }) => {
     const setAllResources = useSetAtom(kubernetesResourceAtom);
-    const setLoading = useSetAtom(kubernetesLoadingAtom);
 
     // Map key is result of makeKubePath(resource)
     const subscriptions = useRef<Map<string, ActiveSubscription>>(new Map());
@@ -64,82 +83,59 @@ export const ResourceSubscriptionProvider = ({
                 case "init":
                     sub.initializing = true;
                     sub.seenUids.clear();
-                    setLoading((prev) => ({ ...prev, [key]: true }));
-                    // Do NOT clear the cache here. We want to keep effective cache until InitDone.
+                    sub.initializing = true;
+                    sub.seenUids.clear();
+                    setAllResources((prev) => {
+                        const current = prev[key] || { resources: [], isLoading: false };
+                        return { ...prev, [key]: { ...current, isLoading: true } };
+                    });
                     break;
 
                 case "initApply":
                     sub.seenUids.add(event.data.resource.metadata.uid);
                     setAllResources((prevCache) => {
-                        const currentList = prevCache[key] || [];
-                        // Upsert
-                        const exists = currentList.find(
-                            (r) => r.metadata.uid === event.data.resource.metadata.uid
-                        );
-                        if (exists) {
-                            // If it exists, replace it (it might be updated)
-                            return {
-                                ...prevCache,
-                                [key]: currentList.map(r => r.metadata.uid === event.data.resource.metadata.uid ? event.data.resource : r)
-                            }
-                        }
+                        const currentEntry = getEntry(prevCache, key);
+                        const newList = updateResourceInList(currentEntry.resources, event.data.resource);
                         return {
                             ...prevCache,
-                            [key]: [...currentList, event.data.resource],
+                            [key]: { ...currentEntry, resources: newList },
                         };
                     });
                     break;
 
                 case "initDone":
                     sub.initializing = false;
-                    setLoading((prev) => ({ ...prev, [key]: false }));
-                    // Prune resources that were NOT seen during init
                     setAllResources((prevCache) => {
-                        const currentList = prevCache[key] || [];
-                        const filtered = currentList.filter((r) =>
+                        const currentEntry = getEntry(prevCache, key);
+                        const filtered = currentEntry.resources.filter((r) =>
                             sub.seenUids.has(r.metadata.uid)
                         );
 
-                        // Optimization: Only update if size changed? 
-                        // But content might have changed in InitApply.
-                        // We trust InitApply handled updates.
-                        // We just need to handle deletions of stale items.
-
-                        // Logic check: InitApply handles updates/inserts. 
-                        // If an item was NOT in InitApply sequence, it's deleted.
-                        // So filtering by seenUids is correct.
-
                         return {
                             ...prevCache,
-                            [key]: filtered,
+                            [key]: { ...currentEntry, resources: filtered, isLoading: false },
                         };
                     });
                     break;
 
                 case "apply":
                     setAllResources((prevCache) => {
-                        const currentList = prevCache[key] || [];
-                        const newItem = event.data.resource;
-                        // Remove old version if exists
-                        const filtered = currentList.filter(
-                            (r) => r.metadata.uid !== newItem.metadata.uid
-                        );
+                        const currentEntry = getEntry(prevCache, key);
+                        const newList = updateResourceInList(currentEntry.resources, event.data.resource);
                         return {
                             ...prevCache,
-                            [key]: [...filtered, newItem],
+                            [key]: { ...currentEntry, resources: newList },
                         };
                     });
                     break;
 
                 case "delete":
                     setAllResources((prevCache) => {
-                        const currentList = prevCache[key] || [];
-                        const deletedItem = event.data.resource;
+                        const currentEntry = getEntry(prevCache, key);
+                        const newList = removeResourceFromList(currentEntry.resources, event.data.resource);
                         return {
                             ...prevCache,
-                            [key]: currentList.filter(
-                                (r) => r.metadata.uid !== deletedItem.metadata.uid
-                            ),
+                            [key]: { ...currentEntry, resources: newList },
                         };
                     });
                     break;
@@ -172,7 +168,11 @@ export const ResourceSubscriptionProvider = ({
                     initializing: true,
                 };
                 subscriptions.current.set(key, newSub);
-                setLoading((prev) => ({ ...prev, [key]: true }));
+                subscriptions.current.set(key, newSub);
+                setAllResources((prev) => {
+                    const current = prev[key] || { resources: [], isLoading: false };
+                    return { ...prev, [key]: { ...current, isLoading: true } };
+                });
                 sub = newSub;
 
                 channel.onmessage = (msg) => {
@@ -194,7 +194,10 @@ export const ResourceSubscriptionProvider = ({
                     // `KubeUrlComponents` has exactly these fields.
                 }).catch((err) => {
                     console.error("Failed to start listening", err);
-                    setLoading((prev) => ({ ...prev, [key]: false }));
+                    setAllResources((prev) => {
+                        const current = prev[key] || { resources: [], isLoading: false };
+                        return { ...prev, [key]: { ...current, isLoading: false } };
+                    });
                     // Cleanup?
                     subscriptions.current.delete(key);
                 });
